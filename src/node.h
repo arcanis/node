@@ -117,6 +117,8 @@
 // Forward-declare libuv loop
 struct uv_loop_s;
 
+struct napi_module;
+
 // Forward-declare these functions now to stop MSVS from becoming
 // terminally confused when it's done in node_internals.h
 namespace node {
@@ -820,6 +822,8 @@ extern "C" NODE_EXTERN void node_module_register(void* mod);
 // the time during which the Environment exists.
 NODE_EXTERN void AddLinkedBinding(Environment* env, const node_module& mod);
 NODE_EXTERN void AddLinkedBinding(Environment* env,
+                                  const struct napi_module& mod);
+NODE_EXTERN void AddLinkedBinding(Environment* env,
                                   const char* name,
                                   addon_context_register_func fn,
                                   void* priv);
@@ -866,6 +870,20 @@ NODE_EXTERN void AddEnvironmentCleanupHook(v8::Isolate* isolate,
 NODE_EXTERN void RemoveEnvironmentCleanupHook(v8::Isolate* isolate,
                                               void (*fun)(void* arg),
                                               void* arg);
+
+/* These are async equivalents of the above. After the cleanup hook is invoked,
+ * `cb(cbarg)` *must* be called, and attempting to remove the cleanup hook will
+ * have no effect. */
+struct ACHHandle;
+struct NODE_EXTERN DeleteACHHandle { void operator()(ACHHandle*) const; };
+typedef std::unique_ptr<ACHHandle, DeleteACHHandle> AsyncCleanupHookHandle;
+
+NODE_EXTERN AsyncCleanupHookHandle AddEnvironmentCleanupHook(
+    v8::Isolate* isolate,
+    void (*fun)(void* arg, void (*cb)(void*), void* cbarg),
+    void* arg);
+
+NODE_EXTERN void RemoveEnvironmentCleanupHook(AsyncCleanupHookHandle holder);
 
 /* Returns the id of the current execution context. If the return value is
  * zero then no execution has been set. This will happen if the user handles

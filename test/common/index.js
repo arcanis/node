@@ -115,8 +115,6 @@ const isOSX = process.platform === 'darwin';
 
 const isDumbTerminal = process.env.TERM === 'dumb';
 
-const rootDir = isWindows ? 'c:\\' : '/';
-
 const buildType = process.config.target_defaults ?
   process.config.target_defaults.default_configuration :
   'Release';
@@ -601,11 +599,8 @@ function getBufferSources(buf) {
   return [...getArrayBufferViews(buf), new Uint8Array(buf).buffer];
 }
 
-// Crash the process on unhandled rejections.
-const crashOnUnhandledRejection = (err) => { throw err; };
-process.on('unhandledRejection', crashOnUnhandledRejection);
 function disableCrashOnUnhandledRejection() {
-  process.removeListener('unhandledRejection', crashOnUnhandledRejection);
+  process.on('unhandledRejection', () => {});
 }
 
 function getTTYfd() {
@@ -726,7 +721,6 @@ const common = {
   platformTimeout,
   printSkipMessage,
   pwdCommand,
-  rootDir,
   runWithInvalidFD,
   skip,
   skipIf32Bits,

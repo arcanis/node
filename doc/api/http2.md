@@ -2,6 +2,10 @@
 <!-- YAML
 added: v8.4.0
 changes:
+  - version: REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/34664
+    description: Requests with the `host` header (with or without
+                 `:authority`) can now be sent/received.
   - version: v10.10.0
     pr-url: https://github.com/nodejs/node/pull/22466
     description: HTTP/2 is now Stable. Previously, it had been Experimental.
@@ -1727,6 +1731,20 @@ the request body.
 When this event is emitted and handled, the [`'request'`][] event will
 not be emitted.
 
+### Event: `'connection'`
+<!-- YAML
+added: v8.4.0
+-->
+
+* `socket` {stream.Duplex}
+
+This event is emitted when a new TCP stream is established. `socket` is
+typically an object of type [`net.Socket`][]. Usually users will not want to
+access this event.
+
+This event can also be explicitly emitted by users to inject connections
+into the HTTP server. In that case, any [`Duplex`][] stream can be passed.
+
 #### Event: `'request'`
 <!-- YAML
 added: v8.4.0
@@ -1887,6 +1905,20 @@ the request body.
 
 When this event is emitted and handled, the [`'request'`][] event will
 not be emitted.
+
+### Event: `'connection'`
+<!-- YAML
+added: v8.4.0
+-->
+
+* `socket` {stream.Duplex}
+
+This event is emitted when a new TCP stream is established, before the TLS
+handshake begins. `socket` is typically an object of type [`net.Socket`][].
+Usually users will not want to access this event.
+
+This event can also be explicitly emitted by users to inject connections
+into the HTTP server. In that case, any [`Duplex`][] stream can be passed.
 
 #### Event: `'request'`
 <!-- YAML
@@ -2396,7 +2428,6 @@ added: v8.4.0
 -->
 
 #### Error codes for `RST_STREAM` and `GOAWAY`
-<a id="error_codes"></a>
 
 | Value  | Name                | Constant                                      |
 |--------|---------------------|-----------------------------------------------|
@@ -2502,7 +2533,7 @@ For incoming headers:
   `access-control-max-age`, `access-control-request-method`, `content-encoding`,
   `content-language`, `content-length`, `content-location`, `content-md5`,
   `content-range`, `content-type`, `date`, `dnt`, `etag`, `expires`, `from`,
-  `if-match`, `if-modified-since`, `if-none-match`, `if-range`,
+  `host`, `if-match`, `if-modified-since`, `if-none-match`, `if-range`,
   `if-unmodified-since`, `last-modified`, `location`, `max-forwards`,
   `proxy-authorization`, `range`, `referer`,`retry-after`, `tk`,
   `upgrade-insecure-requests`, `user-agent` or `x-content-type-options` are
@@ -2520,7 +2551,6 @@ server.on('stream', (stream, headers) => {
 });
 ```
 
-<a id="http2-sensitive-headers"></a>
 #### Sensitive headers
 
 HTTP2 headers can be marked as sensitive, which means that the HTTP/2
@@ -2586,6 +2616,7 @@ properties.
 * `maxHeaderListSize` {number} Specifies the maximum size (uncompressed octets)
   of header list that will be accepted. The minimum allowed value is 0. The
   maximum allowed value is 2<sup>32</sup>-1. **Default:** `65535`.
+* `maxHeaderSize` {number} Alias for `maxHeaderListSize`.
 * `enableConnectProtocol`{boolean} Specifies `true` if the "Extended Connect
   Protocol" defined by [RFC 8441][] is to be enabled. This setting is only
   meaningful if sent by the server. Once the `enableConnectProtocol` setting
@@ -2880,8 +2911,10 @@ added: v8.4.0
 
 * {string}
 
-The request authority pseudo header field. It can also be accessed via
-`req.headers[':authority']`.
+The request authority pseudo header field. Because HTTP/2 allows requests
+to set either `:authority` or `host`, this value is derived from
+`req.headers[':authority']` if present. Otherwise, it is derived from
+`req.headers['host']`.
 
 #### `request.complete`
 <!-- YAML
@@ -3107,47 +3140,25 @@ Then `request.url` will be:
 '/status?name=ryan'
 ```
 
-To parse the url into its parts, `require('url').parse(request.url)`
-can be used:
+To parse the url into its parts, `new URL()` can be used:
 
 ```console
 $ node
-> require('url').parse('/status?name=ryan')
-Url {
-  protocol: null,
-  slashes: null,
-  auth: null,
-  host: null,
-  port: null,
-  hostname: null,
-  hash: null,
-  search: '?name=ryan',
-  query: 'name=ryan',
+> new URL('/status?name=ryan', 'http://example.com')
+URL {
+  href: 'http://example.com/status?name=ryan',
+  origin: 'http://example.com',
+  protocol: 'http:',
+  username: '',
+  password: '',
+  host: 'example.com',
+  hostname: 'example.com',
+  port: '',
   pathname: '/status',
-  path: '/status?name=ryan',
-  href: '/status?name=ryan' }
-```
-
-To extract the parameters from the query string, the
-`require('querystring').parse` function can be used, or
-`true` can be passed as the second argument to `require('url').parse`.
-
-```console
-$ node
-> require('url').parse('/status?name=ryan', true)
-Url {
-  protocol: null,
-  slashes: null,
-  auth: null,
-  host: null,
-  port: null,
-  hostname: null,
-  hash: null,
   search: '?name=ryan',
-  query: { name: 'ryan' },
-  pathname: '/status',
-  path: '/status?name=ryan',
-  href: '/status?name=ryan' }
+  searchParams: URLSearchParams { 'name' => 'ryan' },
+  hash: ''
+}
 ```
 
 ### Class: `http2.Http2ServerResponse`
@@ -3680,16 +3691,28 @@ following additional properties:
 * `type` {string} Either `'server'` or `'client'` to identify the type of
   `Http2Session`.
 
+## Note on `:authority` and `host`
+
+HTTP/2 requires requests to have either the `:authority` pseudo-header
+or the `host` header. Prefer `:authority` when constructing an HTTP/2
+request directly, and `host` when converting from HTTP/1 (in proxies,
+for instance).
+
+The compatibility API falls back to `host` if `:authority` is not
+present. See [`request.authority`][] for more information. However,
+if you don't use the compatibility API (or use `req.headers` directly),
+you need to implement any fall-back behaviour yourself.
+
 [ALPN Protocol ID]: https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
 [ALPN negotiation]: #http2_alpn_negotiation
 [Compatibility API]: #http2_compatibility_api
-[HTTP/1]: http.html
+[HTTP/1]: http.md
+[HTTP/2]: https://tools.ietf.org/html/rfc7540
 [HTTP/2 Headers Object]: #http2_headers_object
 [HTTP/2 Settings Object]: #http2_settings_object
 [HTTP/2 Unencrypted]: https://http2.github.io/faq/#does-http2-require-encryption
-[HTTP/2]: https://tools.ietf.org/html/rfc7540
-[HTTPS]: https.html
-[Performance Observer]: perf_hooks.html
+[HTTPS]: https.md
+[Performance Observer]: perf_hooks.md
 [RFC 7838]: https://tools.ietf.org/html/rfc7838
 [RFC 8336]: https://tools.ietf.org/html/rfc8336
 [RFC 8441]: https://tools.ietf.org/html/rfc8441
@@ -3698,42 +3721,43 @@ following additional properties:
 [`'request'`]: #http2_event_request
 [`'unknownProtocol'`]: #http2_event_unknownprotocol
 [`ClientHttp2Stream`]: #http2_class_clienthttp2stream
-[`Duplex`]: stream.html#stream_class_stream_duplex
+[`Duplex`]: stream.md#stream_class_stream_duplex
 [`Http2ServerRequest`]: #http2_class_http2_http2serverrequest
-[`Http2ServerResponse`]: #class-http2http2serverresponse
+[`Http2ServerResponse`]: #http2_class_http2_http2serverresponse
 [`Http2Session` and Sockets]: #http2_http2session_and_sockets
 [`Http2Stream`]: #http2_class_http2stream
 [`ServerHttp2Stream`]: #http2_class_serverhttp2stream
-[`TypeError`]: errors.html#errors_class_typeerror
-[`http.ClientRequest#maxHeadersCount`]: http.html#http_request_maxheaderscount
-[`http.Server#maxHeadersCount`]: http.html#http_server_maxheaderscount
+[`TypeError`]: errors.md#errors_class_typeerror
+[`http.ClientRequest#maxHeadersCount`]: http.md#http_request_maxheaderscount
+[`http.Server#maxHeadersCount`]: http.md#http_server_maxheaderscount
 [`http2.SecureServer`]: #http2_class_http2secureserver
 [`http2.Server`]: #http2_class_http2server
 [`http2.createSecureServer()`]: #http2_http2_createsecureserver_options_onrequesthandler
 [`http2.createServer()`]: #http2_http2_createserver_options_onrequesthandler
 [`http2session.close()`]: #http2_http2session_close_callback
 [`http2stream.pushStream()`]: #http2_http2stream_pushstream_headers_options_callback
-[`net.createServer()`]: net.html#net_net_createserver_options_connectionlistener
-[`net.Server.close()`]: net.html#net_server_close_callback
-[`net.Socket.bufferSize`]: net.html#net_socket_buffersize
-[`net.Socket.prototype.ref()`]: net.html#net_socket_ref
-[`net.Socket.prototype.unref()`]: net.html#net_socket_unref
-[`net.Socket`]: net.html#net_class_net_socket
-[`net.connect()`]: net.html#net_net_connect
+[`net.Server.close()`]: net.md#net_server_close_callback
+[`net.Socket.bufferSize`]: net.md#net_socket_buffersize
+[`net.Socket.prototype.ref()`]: net.md#net_socket_ref
+[`net.Socket.prototype.unref()`]: net.md#net_socket_unref
+[`net.Socket`]: net.md#net_class_net_socket
+[`net.connect()`]: net.md#net_net_connect
+[`net.createServer()`]: net.md#net_net_createserver_options_connectionlistener
+[`request.authority`]: #http2_request_authority
 [`request.socket`]: #http2_request_socket
-[`request.socket.getPeerCertificate()`]: tls.html#tls_tlssocket_getpeercertificate_detailed
+[`request.socket.getPeerCertificate()`]: tls.md#tls_tlssocket_getpeercertificate_detailed
 [`response.end()`]: #http2_response_end_data_encoding_callback
 [`response.setHeader()`]: #http2_response_setheader_name_value
 [`response.socket`]: #http2_response_socket
 [`response.writableEnded`]: #http2_response_writableended
 [`response.write()`]: #http2_response_write_chunk_encoding_callback
-[`response.write(data, encoding)`]: http.html#http_response_write_chunk_encoding_callback
+[`response.write(data, encoding)`]: http.md#http_response_write_chunk_encoding_callback
 [`response.writeContinue()`]: #http2_response_writecontinue
 [`response.writeHead()`]: #http2_response_writehead_statuscode_statusmessage_headers
-[`tls.Server.close()`]: tls.html#tls_server_close_callback
-[`tls.TLSSocket`]: tls.html#tls_class_tls_tlssocket
-[`tls.connect()`]: tls.html#tls_tls_connect_options_callback
-[`tls.createServer()`]: tls.html#tls_tls_createserver_options_secureconnectionlistener
-[`writable.writableFinished`]: stream.html#stream_writable_writablefinished
-[error code]: #error_codes
-[Sensitive headers]: #http2-sensitive-headers
+[`tls.Server.close()`]: tls.md#tls_server_close_callback
+[`tls.TLSSocket`]: tls.md#tls_class_tls_tlssocket
+[`tls.connect()`]: tls.md#tls_tls_connect_options_callback
+[`tls.createServer()`]: tls.md#tls_tls_createserver_options_secureconnectionlistener
+[`writable.writableFinished`]: stream.md#stream_writable_writablefinished
+[error code]: #http2_error_codes_for_rst_stream_and_goaway
+[Sensitive headers]: #http2_sensitive_headers

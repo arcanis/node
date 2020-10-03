@@ -43,6 +43,7 @@ static bool ShouldAbortOnUncaughtException(Isolate* isolate) {
   Environment* env = Environment::GetCurrent(isolate);
   return env != nullptr &&
          (env->is_main_thread() || !env->is_stopping()) &&
+         env->abort_on_uncaught_exception() &&
          env->should_abort_on_uncaught_toggle()[0] &&
          !env->inside_should_not_abort_on_uncaught_scope();
 }
@@ -676,6 +677,10 @@ void AddLinkedBinding(Environment* env, const node_module& mod) {
     prev_head->nm_link = &env->extra_linked_bindings()->back();
 }
 
+void AddLinkedBinding(Environment* env, const napi_module& mod) {
+  AddLinkedBinding(env, napi_module_to_node_module(&mod));
+}
+
 void AddLinkedBinding(Environment* env,
                       const char* name,
                       addon_context_register_func fn,
@@ -704,6 +709,7 @@ void DefaultProcessExitHandler(Environment* env, int exit_code) {
   env->set_can_call_into_js(false);
   env->stop_sub_worker_contexts();
   DisposePlatform();
+  uv_library_shutdown();
   exit(exit_code);
 }
 

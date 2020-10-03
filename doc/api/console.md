@@ -152,20 +152,22 @@ changes:
 * `value` {any} The value tested for being truthy.
 * `...message` {any} All arguments besides `value` are used as error message.
 
-A simple assertion test that verifies whether `value` is truthy. If it is not,
-`Assertion failed` is logged. If provided, the error `message` is formatted
-using [`util.format()`][] by passing along all message arguments. The output is
-used as the error message.
+`console.assert()` writes a message if `value` is [falsy][] or omitted. It only
+writes a message and does not otherwise affect execution. The output always
+starts with `"Assertion failed"`. If provided, `message` is formatted using
+[`util.format()`][].
+
+If `value` is [truthy][], nothing happens.
 
 ```js
 console.assert(true, 'does nothing');
-// OK
+
 console.assert(false, 'Whoops %s work', 'didn\'t');
 // Assertion failed: Whoops didn't work
-```
 
-Calling `console.assert()` with a falsy assertion will only cause the `message`
-to be printed to the console without interrupting execution of subsequent code.
+console.assert();
+// Assertion failed
+```
 
 ### `console.clear()`
 <!-- YAML
@@ -416,7 +418,8 @@ added: v0.1.104
 Starts a timer that can be used to compute the duration of an operation. Timers
 are identified by a unique `label`. Use the same `label` when calling
 [`console.timeEnd()`][] to stop the timer and output the elapsed time in
-milliseconds to `stdout`. Timer durations are accurate to the sub-millisecond.
+suitable time units to `stdout`. For example, if the elapsed
+time is 3869ms, `console.timeEnd()` displays "3.869s".
 
 ### `console.timeEnd([label])`
 <!-- YAML
@@ -554,10 +557,12 @@ This method does not display anything unless used in the inspector. The
 [`console.profileEnd()`]: #console_console_profileend_label
 [`console.time()`]: #console_console_time_label
 [`console.timeEnd()`]: #console_console_timeend_label
-[`process.stderr`]: process.html#process_process_stderr
-[`process.stdout`]: process.html#process_process_stdout
-[`util.format()`]: util.html#util_util_format_format_args
-[`util.inspect()`]: util.html#util_util_inspect_object_options
-[customizing `util.inspect()` colors]: util.html#util_customizing_util_inspect_colors
-[inspector]: debugger.html
-[note on process I/O]: process.html#process_a_note_on_process_i_o
+[`process.stderr`]: process.md#process_process_stderr
+[`process.stdout`]: process.md#process_process_stdout
+[`util.format()`]: util.md#util_util_format_format_args
+[`util.inspect()`]: util.md#util_util_inspect_object_options
+[customizing `util.inspect()` colors]: util.md#util_customizing_util_inspect_colors
+[falsy]: https://developer.mozilla.org/en-US/docs/Glossary/Falsy
+[inspector]: debugger.md
+[note on process I/O]: process.md#process_a_note_on_process_i_o
+[truthy]: https://developer.mozilla.org/en-US/docs/Glossary/Truthy

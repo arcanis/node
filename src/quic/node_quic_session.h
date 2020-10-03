@@ -75,6 +75,7 @@ class QuicSessionConfig final : public ngtcp2_settings {
 
   QuicSessionConfig(const QuicSessionConfig& config) {
     initial_ts = uv_hrtime();
+    initial_rtt = config.initial_rtt;
     transport_params = config.transport_params;
     max_udp_payload_size = config.max_udp_payload_size;
     cc_algo = config.cc_algo;
@@ -147,7 +148,7 @@ enum QuicClientSessionOptions : uint32_t {
 #define QUICSESSION_SHARED_STATE(V)                                            \
   V(KEYLOG_ENABLED, keylog_enabled, uint8_t)                                   \
   V(CLIENT_HELLO_ENABLED, client_hello_enabled, uint8_t)                       \
-  V(CERT_ENABLED, cert_enabled, uint8_t)                                       \
+  V(OCSP_ENABLED, ocsp_enabled, uint8_t)                                       \
   V(PATH_VALIDATED_ENABLED, path_validated_enabled, uint8_t)                   \
   V(USE_PREFERRED_ADDRESS_ENABLED, use_preferred_address_enabled, uint8_t)     \
   V(HANDSHAKE_CONFIRMED, handshake_confirmed, uint8_t)                         \
@@ -204,7 +205,10 @@ enum QuicSessionStateFields {
   V(BLOCK_COUNT, block_count, "Block Count")                                   \
   V(MIN_RTT, min_rtt, "Minimum RTT")                                           \
   V(LATEST_RTT, latest_rtt, "Latest RTT")                                      \
-  V(SMOOTHED_RTT, smoothed_rtt, "Smoothed RTT")
+  V(SMOOTHED_RTT, smoothed_rtt, "Smoothed RTT")                                \
+  V(CWND, cwnd, "Cwnd")                                                        \
+  V(RECEIVE_RATE, receive_rate, "Receive Rate / Sec")                          \
+  V(SEND_RATE, send_rate, "Send Rate  Sec")                                    \
 
 #define V(name, _, __) IDX_QUIC_SESSION_STATS_##name,
 enum QuicSessionStatsIdx : int {
@@ -234,7 +238,7 @@ class QLogStream final : public AsyncWrap,
 
   QLogStream(Environment* env, v8::Local<v8::Object> obj);
 
-  void Emit(const uint8_t* data, size_t len);
+  void Emit(const uint8_t* data, size_t len, uint32_t flags);
 
   void End() { ended_ = true; }
 
@@ -407,13 +411,11 @@ class QuicCryptoContext final : public MemoryRetainer {
 
   int OnClientHello();
 
-  inline void OnClientHelloDone();
+  void OnClientHelloDone(BaseObjectPtr<crypto::SecureContext> context);
 
   int OnOCSP();
 
-  void OnOCSPDone(
-      BaseObjectPtr<crypto::SecureContext> secure_context,
-      v8::Local<v8::Value> ocsp_response);
+  void OnOCSPDone(v8::Local<v8::Value> ocsp_response);
 
   bool OnSecrets(
       ngtcp2_crypto_level level,
@@ -477,7 +479,7 @@ class QuicCryptoContext final : public MemoryRetainer {
 
   bool InitiateKeyUpdate();
 
-  int VerifyPeerIdentity(const char* hostname);
+  int VerifyPeerIdentity();
 
   QuicSession* session() const { return session_.get(); }
 
@@ -618,20 +620,17 @@ class QuicApplication : public MemoryRetainer,
 
   virtual void ResumeStream(int64_t stream_id) {}
 
-  virtual void SetSessionTicketAppData(const SessionTicketAppData& app_data) {
-    // TODO(@jasnell): Different QUIC applications may wish to set some
-    // application data in the session ticket (e.g. http/3 would set
-    // server settings in the application data). For now, doing nothing
-    // as I'm just adding the basic mechanism.
-  }
+  // Different QUIC applications may set some application data in
+  // the session ticket (e.g. http/3 would set server settings in the
+  // application data). By default, there's nothing to set.
+  virtual void SetSessionTicketAppData(const SessionTicketAppData& app_data) {}
 
+  // Different QUIC applications may set some application data in
+  // the session ticket (e.g. http/3 would set server settings in the
+  // application data). By default, there's nothing to get.
   virtual SessionTicketAppData::Status GetSessionTicketAppData(
       const SessionTicketAppData& app_data,
       SessionTicketAppData::Flag flag) {
-    // TODO(@jasnell): Different QUIC application may wish to set some
-    // application data in the session ticket (e.g. http/3 would set
-    // server settings in the application data). For now, doing nothing
-    // as I'm just adding the basic mechanism.
     return flag == SessionTicketAppData::Flag::STATUS_RENEW ?
       SessionTicketAppData::Status::TICKET_USE_RENEW :
       SessionTicketAppData::Status::TICKET_USE;
@@ -1277,8 +1276,6 @@ class QuicSession final : public AsyncWrap,
 
   bool WritePackets(const char* diagnostic_label = nullptr);
 
-  void UpdateRecoveryStats();
-
   void UpdateConnectionID(
       int type,
       const QuicCID& cid,
@@ -1370,11 +1367,9 @@ class QuicSession final : public AsyncWrap,
       void* stream_user_data);
 
   static int OnRand(
-      ngtcp2_conn* conn,
       uint8_t* dest,
       size_t destlen,
-      ngtcp2_rand_ctx ctx,
-      void* user_data);
+      ngtcp2_rand_ctx ctx);
 
   static int OnGetNewConnectionID(
       ngtcp2_conn* conn,
@@ -1441,7 +1436,11 @@ class QuicSession final : public AsyncWrap,
       const uint8_t* token,
       void* user_data);
 
-  static void OnQlogWrite(void* user_data, const void* data, size_t len);
+  static void OnQlogWrite(
+      void* user_data,
+      uint32_t flags,
+      const void* data,
+      size_t len);
 
 #define V(id, _) QUICSESSION_FLAG_##id,
   enum QuicSessionFlags : uint32_t {
@@ -1507,6 +1506,22 @@ class QuicSession final : public AsyncWrap,
   friend class QuicCryptoContext;
   friend class QuicSessionListener;
   friend class JSQuicSessionListener;
+};
+
+class QuicCallbackScope {
+ public:
+  explicit QuicCallbackScope(QuicSession* session);
+  ~QuicCallbackScope();
+
+  void operator=(const QuicCallbackScope&) = delete;
+  void operator=(QuicCallbackScope&&) = delete;
+  QuicCallbackScope(const QuicCallbackScope&) = delete;
+  QuicCallbackScope(QuicCallbackScope&&) = delete;
+
+ private:
+  BaseObjectPtr<QuicSession> session_;
+  std::unique_ptr<InternalCallbackScope> private_;
+  v8::TryCatch try_catch_;
 };
 
 }  // namespace quic

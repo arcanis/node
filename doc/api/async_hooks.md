@@ -182,7 +182,7 @@ of asynchronous operations.
 * Returns: {AsyncHook} A reference to `asyncHook`.
 
 Enable the callbacks for a given `AsyncHook` instance. If no callbacks are
-provided enabling is a noop.
+provided, enabling is a no-op.
 
 The `AsyncHook` instance is disabled by default. If the `AsyncHook` instance
 should be enabled immediately after creation, the following pattern can be used.
@@ -273,7 +273,8 @@ async_hooks.createHook({
   init(asyncId, type, triggerAsyncId) {
     const eid = async_hooks.executionAsyncId();
     fs.writeSync(
-      1, `${type}(${asyncId}): trigger: ${triggerAsyncId} execution: ${eid}\n`);
+      process.stdout.fd,
+      `${type}(${asyncId}): trigger: ${triggerAsyncId} execution: ${eid}\n`);
   }
 }).enable();
 
@@ -325,7 +326,7 @@ async_hooks.createHook({
     const eid = async_hooks.executionAsyncId();
     const indentStr = ' '.repeat(indent);
     fs.writeSync(
-      1,
+      process.stdout.fd,
       `${indentStr}${type}(${asyncId}):` +
       ` trigger: ${triggerAsyncId} execution: ${eid}\n`);
   },
@@ -729,6 +730,32 @@ class DBQuery extends AsyncResource {
 }
 ```
 
+#### Static method: `AsyncResource.bind(fn[, type])`
+<!-- YAML
+added: v14.8.0
+-->
+
+* `fn` {Function} The function to bind to the current execution context.
+* `type` {string} An optional name to associate with the underlying
+  `AsyncResource`.
+
+Binds the given function to the current execution context.
+
+The returned function will have an `asyncResource` property referencing
+the `AsyncResource` to which the function is bound.
+
+#### `asyncResource.bind(fn)`
+<!-- YAML
+added: v14.8.0
+-->
+
+* `fn` {Function} The function to bind to the current `AsyncResource`.
+
+Binds the given function to execute to this `AsyncResource`'s scope.
+
+The returned function will have an `asyncResource` property referencing
+the `AsyncResource` to which the function is bound.
+
 #### `asyncResource.runInAsyncScope(fn[, thisArg, ...args])`
 <!-- YAML
 added: v9.6.0
@@ -900,12 +927,12 @@ const { createServer } = require('http');
 const { AsyncResource, executionAsyncId } = require('async_hooks');
 
 const server = createServer((req, res) => {
-  const asyncResource = new AsyncResource('request');
-  // The listener will always run in the execution context of `asyncResource`.
-  req.on('close', asyncResource.runInAsyncScope.bind(asyncResource, () => {
-    // Prints: true
-    console.log(asyncResource.asyncId() === executionAsyncId());
+  req.on('close', AsyncResource.bind(() => {
+    // Execution context is bound to the current outer scope.
   }));
+  req.on('close', () => {
+    // Execution context is bound to the scope that caused 'close' to emit.
+  });
   res.end();
 }).listen(3000);
 ```
@@ -1146,26 +1173,26 @@ functions called by `foo`. Outside of `run`, calling `getStore` will return
 
 In most cases your application or library code should have no issues with
 `AsyncLocalStorage`. But in rare cases you may face situations when the
-current store is lost in one of asynchronous operations. Then you should
+current store is lost in one of asynchronous operations. In those cases,
 consider the following options.
 
 If your code is callback-based, it is enough to promisify it with
 [`util.promisify()`][], so it starts working with native promises.
 
 If you need to keep using callback-based API, or your code assumes
-a custom thenable implementation, you should use [`AsyncResource`][] class
+a custom thenable implementation, use the [`AsyncResource`][] class
 to associate the asynchronous operation with the correct execution context.
 
+[Hook Callbacks]: #async_hooks_hook_callbacks
+[PromiseHooks]: https://docs.google.com/document/d/1rda3yKGHimKIhg5YeoAmCOtyURgsbTH_qaYR79FELlk/edit
 [`AsyncResource`]: #async_hooks_class_asyncresource
 [`after` callback]: #async_hooks_after_asyncid
 [`before` callback]: #async_hooks_before_asyncid
 [`destroy` callback]: #async_hooks_destroy_asyncid
 [`init` callback]: #async_hooks_init_asyncid_type_triggerasyncid_resource
 [`promiseResolve` callback]: #async_hooks_promiseresolve_asyncid
-[`EventEmitter`]: events.html#events_class_eventemitter
-[Hook Callbacks]: #async_hooks_hook_callbacks
-[PromiseHooks]: https://docs.google.com/document/d/1rda3yKGHimKIhg5YeoAmCOtyURgsbTH_qaYR79FELlk/edit
-[`Stream`]: stream.html#stream_stream
-[`Worker`]: worker_threads.html#worker_threads_class_worker
+[`EventEmitter`]: events.md#events_class_eventemitter
+[`Stream`]: stream.md#stream_stream
+[`Worker`]: worker_threads.md#worker_threads_class_worker
+[`util.promisify()`]: util.md#util_util_promisify_original
 [promise execution tracking]: #async_hooks_promise_execution_tracking
-[`util.promisify()`]: util.html#util_util_promisify_original

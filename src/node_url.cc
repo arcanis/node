@@ -779,6 +779,8 @@ bool ToASCII(const std::string& input, std::string* output) {
   MaybeStackBuffer<char> buf;
   if (i18n::ToASCII(&buf, input.c_str(), input.length()) < 0)
     return false;
+  if (buf.length() == 0)
+    return false;
   output->assign(*buf, buf.length());
   return true;
 }
@@ -1170,7 +1172,7 @@ bool ParseHost(const std::string& input,
                std::string* output,
                bool is_special,
                bool unicode = false) {
-  if (input.length() == 0) {
+  if (input.empty()) {
     output->clear();
     return true;
   }
@@ -2037,7 +2039,7 @@ void URL::Parse(const char* input,
               (ch == kEOL ||
                ch == '?' ||
                ch == '#')) {
-            while (url->path.size() > 1 && url->path[0].length() == 0) {
+            while (url->path.size() > 1 && url->path[0].empty()) {
               url->path.erase(url->path.begin());
             }
           }
@@ -2060,9 +2062,9 @@ void URL::Parse(const char* input,
             state = kFragment;
             break;
           default:
-            if (url->path.size() == 0)
+            if (url->path.empty())
               url->path.emplace_back("");
-            if (url->path.size() > 0 && ch != kEOL)
+            else if (ch != kEOL)
               AppendOrEscape(&url->path[0], ch, C0_CONTROL_ENCODE_SET);
         }
         break;
@@ -2083,8 +2085,6 @@ void URL::Parse(const char* input,
           case kEOL:
             url->flags |= URL_FLAGS_HAS_FRAGMENT;
             url->fragment = std::move(buffer);
-            break;
-          case 0:
             break;
           default:
             AppendOrEscape(&buffer, ch, FRAGMENT_ENCODE_SET);

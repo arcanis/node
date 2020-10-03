@@ -513,6 +513,14 @@ inline bool Environment::abort_on_uncaught_exception() const {
   return options_->abort_on_uncaught_exception;
 }
 
+inline void Environment::set_force_context_aware(bool value) {
+  options_->force_context_aware = value;
+}
+
+inline bool Environment::force_context_aware() const {
+  return options_->force_context_aware;
+}
+
 inline void Environment::set_abort_on_uncaught_exception(bool value) {
   options_->abort_on_uncaught_exception = value;
 }
@@ -798,14 +806,6 @@ bool Environment::filehandle_close_warning() const {
 
 void Environment::set_filehandle_close_warning(bool on) {
   emit_filehandle_warning_ = on;
-}
-
-bool Environment::emit_insecure_umask_warning() const {
-  return emit_insecure_umask_warning_;
-}
-
-void Environment::set_emit_insecure_umask_warning(bool on) {
-  emit_insecure_umask_warning_ = on;
 }
 
 void Environment::set_source_maps_enabled(bool on) {

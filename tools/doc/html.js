@@ -51,10 +51,12 @@ function navClasses() {
 }
 
 const gtocPath = path.join(docPath, 'api', 'index.md');
-const gtocMD = fs.readFileSync(gtocPath, 'utf8').replace(/^<!--.*?-->/gms, '');
+const gtocMD = fs.readFileSync(gtocPath, 'utf8')
+  .replace(/\(([^#?]+?)\.md\)/ig, (_, filename) => `(${filename}.html)`)
+  .replace(/^<!--.*?-->/gms, '');
 const gtocHTML = unified()
   .use(markdown)
-  .use(remark2rehype, { allowDangerousHTML: true })
+  .use(remark2rehype, { allowDangerousHtml: true })
   .use(raw)
   .use(navClasses)
   .use(htmlStringify)
@@ -74,7 +76,7 @@ function toHTML({ input, content, filename, nodeVersion, versions }) {
                      .replace(/__VERSION__/g, nodeVersion)
                      .replace('__TOC__', content.toc)
                      .replace('__GTOC__', gtocHTML.replace(
-                       `class="nav-${id}`, `class="nav-${id} active`))
+                       `class="nav-${id}"`, `class="nav-${id} active"`))
                      .replace('__EDIT_ON_GITHUB__', editOnGitHub(filename))
                      .replace('__CONTENT__', content.toString());
 
@@ -93,12 +95,14 @@ function toHTML({ input, content, filename, nodeVersion, versions }) {
 // Set the section name based on the first header.  Default to 'Index'.
 function firstHeader() {
   return (tree, file) => {
-    file.section = 'Index';
-
     const heading = find(tree, { type: 'heading' });
-    if (heading) {
-      const text = find(heading, { type: 'text' });
-      if (text) file.section = text.value;
+
+    if (heading && heading.children.length) {
+      const recursiveTextContent = (node) =>
+        node.value || node.children.map(recursiveTextContent).join('');
+      file.section = recursiveTextContent(heading);
+    } else {
+      file.section = 'Index';
     }
   };
 }
@@ -124,8 +128,6 @@ function preprocessText({ nodeVersion }) {
 
 // Syscalls which appear in the docs, but which only exist in BSD / macOS.
 const BSD_ONLY_SYSCALLS = new Set(['lchmod']);
-const LINUX_DIE_ONLY_SYSCALLS = new Set(['uname']);
-const HAXX_ONLY_SYSCALLS = new Set(['curl']);
 const MAN_PAGE = /(^|\s)([a-z.]+)\((\d)([a-z]?)\)/gm;
 
 // Handle references to man pages, eg "open(2)" or "lchmod(2)".
@@ -141,13 +143,6 @@ function linkManPages(text) {
       if (BSD_ONLY_SYSCALLS.has(name)) {
         return `${beginning}<a href="https://www.freebsd.org/cgi/man.cgi` +
           `?query=${name}&sektion=${number}">${displayAs}</a>`;
-      }
-      if (LINUX_DIE_ONLY_SYSCALLS.has(name)) {
-        return `${beginning}<a href="https://linux.die.net/man/` +
-                `${number}/${name}">${displayAs}</a>`;
-      }
-      if (HAXX_ONLY_SYSCALLS.has(name)) {
-        return `${beginning}<a href="https://${name}.haxx.se/docs/manpage.html">${displayAs}</a>`;
       }
 
       return `${beginning}<a href="http://man7.org/linux/man-pages/man${number}` +
@@ -288,7 +283,7 @@ function parseYAML(text) {
     meta.changes.forEach((change) => {
       const description = unified()
         .use(markdown)
-        .use(remark2rehype, { allowDangerousHTML: true })
+        .use(remark2rehype, { allowDangerousHtml: true })
         .use(raw)
         .use(htmlStringify)
         .processSync(change.description).toString();
@@ -330,6 +325,7 @@ function versionSort(a, b) {
   return +b.match(numberRe)[0] - +a.match(numberRe)[0];
 }
 
+const DEPRECATION_HEADING_PATTERN = /^DEP\d+:/;
 function buildToc({ filename, apilinks }) {
   return (tree, file) => {
     const idCounters = Object.create(null);
@@ -352,10 +348,20 @@ function buildToc({ filename, apilinks }) {
         node.position.end.offset).trim();
       const id = getId(`${realFilename}_${headingText}`, idCounters);
 
+      const isDeprecationHeading =
+        DEPRECATION_HEADING_PATTERN.test(headingText);
+      if (isDeprecationHeading) {
+        if (!node.data) node.data = {};
+        if (!node.data.hProperties) node.data.hProperties = {};
+        node.data.hProperties.id =
+          headingText.substring(0, headingText.indexOf(':'));
+      }
+
       const hasStability = node.stability !== undefined;
       toc += ' '.repeat((depth - 1) * 2) +
         (hasStability ? `* <span class="stability_${node.stability}">` : '* ') +
-        `<a href="#${id}">${headingText}</a>${hasStability ? '</span>' : ''}\n`;
+        `<a href="#${isDeprecationHeading ? node.data.hProperties.id : id}">` +
+        `${headingText}</a>${hasStability ? '</span>' : ''}\n`;
 
       let anchor =
          `<span><a class="mark" href="#${id}" id="${id}">#</a></span>`;
@@ -375,7 +381,7 @@ function buildToc({ filename, apilinks }) {
 
     file.toc = unified()
       .use(markdown)
-      .use(remark2rehype, { allowDangerousHTML: true })
+      .use(remark2rehype, { allowDangerousHtml: true })
       .use(raw)
       .use(htmlStringify)
       .processSync(toc).toString();

@@ -92,20 +92,7 @@ void EnvironmentOptions::CheckOptions(std::vector<std::string>* errors) {
     }
   }
 
-  if (!es_module_specifier_resolution.empty()) {
-    if (!experimental_specifier_resolution.empty()) {
-      errors->push_back(
-        "bad option: cannot use --es-module-specifier-resolution"
-        " and --experimental-specifier-resolution at the same time");
-    } else {
-      experimental_specifier_resolution = es_module_specifier_resolution;
-      if (experimental_specifier_resolution != "node" &&
-          experimental_specifier_resolution != "explicit") {
-        errors->push_back(
-          "invalid value for --es-module-specifier-resolution");
-      }
-    }
-  } else if (!experimental_specifier_resolution.empty()) {
+  if (!experimental_specifier_resolution.empty()) {
     if (experimental_specifier_resolution != "node" &&
         experimental_specifier_resolution != "explicit") {
       errors->push_back(
@@ -281,6 +268,10 @@ DebugOptionsParser::DebugOptionsParser() {
 }
 
 EnvironmentOptionsParser::EnvironmentOptionsParser() {
+  AddOption("--conditions",
+            "additional user conditions for conditional exports and imports",
+            &EnvironmentOptions::conditions,
+            kAllowedInEnvironment);
   AddOption("--diagnostic-dir",
             "set dir for all output files"
             " (default: current working directory)",
@@ -364,10 +355,8 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             "either 'explicit' (default) or 'node'",
             &EnvironmentOptions::experimental_specifier_resolution,
             kAllowedInEnvironment);
-  AddOption("--es-module-specifier-resolution",
-            "",
-            &EnvironmentOptions::es_module_specifier_resolution,
-            kAllowedInEnvironment);
+  AddAlias("--es-module-specifier-resolution",
+           "--experimental-specifier-resolution");
   AddOption("--no-deprecation",
             "silence deprecation warnings",
             &EnvironmentOptions::no_deprecation,
@@ -615,12 +604,13 @@ PerIsolateOptionsParser::PerIsolateOptionsParser(
   Implies("--report-signal", "--report-on-signal");
 
   AddOption("--experimental-top-level-await",
-            "enable experimental support for ECMAScript Top-Level Await",
+            "",
             &PerIsolateOptions::experimental_top_level_await,
             kAllowedInEnvironment);
   AddOption("--harmony-top-level-await", "", V8Option{});
   Implies("--experimental-top-level-await", "--harmony-top-level-await");
   Implies("--harmony-top-level-await", "--experimental-top-level-await");
+  ImpliesNot("--no-harmony-top-level-await", "--experimental-top-level-await");
 
   Insert(eop, &PerIsolateOptions::get_per_env_options);
 }

@@ -447,7 +447,7 @@ static void napi_module_register_cb(v8::Local<v8::Object> exports,
                                     v8::Local<v8::Context> context,
                                     void* priv) {
   napi_module_register_by_symbol(exports, module, context,
-      static_cast<napi_module*>(priv)->nm_register_func);
+      static_cast<const napi_module*>(priv)->nm_register_func);
 }
 
 void napi_module_register_by_symbol(v8::Local<v8::Object> exports,
@@ -480,9 +480,9 @@ void napi_module_register_by_symbol(v8::Local<v8::Object> exports,
   }
 }
 
-// Registers a NAPI module.
-void napi_module_register(napi_module* mod) {
-  node::node_module* nm = new node::node_module {
+namespace node {
+node_module napi_module_to_node_module(const napi_module* mod) {
+  return {
     -1,
     mod->nm_flags | NM_F_DELETEME,
     nullptr,
@@ -490,9 +490,16 @@ void napi_module_register(napi_module* mod) {
     nullptr,
     napi_module_register_cb,
     mod->nm_modname,
-    mod,  // priv
+    const_cast<napi_module*>(mod),  // priv
     nullptr,
   };
+}
+}  // namespace node
+
+// Registers a NAPI module.
+void napi_module_register(napi_module* mod) {
+  node::node_module* nm = new node::node_module(
+      node::napi_module_to_node_module(mod));
   node::node_module_register(nm);
 }
 
@@ -514,6 +521,71 @@ napi_status napi_remove_env_cleanup_hook(napi_env env,
   CHECK_ARG(env, fun);
 
   node::RemoveEnvironmentCleanupHook(env->isolate, fun, arg);
+
+  return napi_ok;
+}
+
+struct napi_async_cleanup_hook_handle__ {
+  napi_async_cleanup_hook_handle__(napi_env env,
+                                   napi_async_cleanup_hook user_hook,
+                                   void* user_data):
+      env_(env),
+      user_hook_(user_hook),
+      user_data_(user_data) {
+    handle_ = node::AddEnvironmentCleanupHook(env->isolate, Hook, this);
+    env->Ref();
+  }
+
+  ~napi_async_cleanup_hook_handle__() {
+    node::RemoveEnvironmentCleanupHook(std::move(handle_));
+    if (done_cb_ != nullptr)
+      done_cb_(done_data_);
+
+    // Release the `env` handle asynchronously since it would be surprising if
+    // a call to a N-API function would destroy `env` synchronously.
+    static_cast<node_napi_env>(env_)->node_env()
+        ->SetImmediate([env = env_](node::Environment*) { env->Unref(); });
+  }
+
+  static void Hook(void* data, void (*done_cb)(void*), void* done_data) {
+    auto handle = static_cast<napi_async_cleanup_hook_handle__*>(data);
+    handle->done_cb_ = done_cb;
+    handle->done_data_ = done_data;
+    handle->user_hook_(handle, handle->user_data_);
+  }
+
+  node::AsyncCleanupHookHandle handle_;
+  napi_env env_ = nullptr;
+  napi_async_cleanup_hook user_hook_ = nullptr;
+  void* user_data_ = nullptr;
+  void (*done_cb_)(void*) = nullptr;
+  void* done_data_ = nullptr;
+};
+
+napi_status napi_add_async_cleanup_hook(
+    napi_env env,
+    napi_async_cleanup_hook hook,
+    void* arg,
+    napi_async_cleanup_hook_handle* remove_handle) {
+  CHECK_ENV(env);
+  CHECK_ARG(env, hook);
+
+  napi_async_cleanup_hook_handle__* handle =
+    new napi_async_cleanup_hook_handle__(env, hook, arg);
+
+  if (remove_handle != nullptr)
+    *remove_handle = handle;
+
+  return napi_clear_last_error(env);
+}
+
+napi_status napi_remove_async_cleanup_hook(
+    napi_async_cleanup_hook_handle remove_handle) {
+
+  if (remove_handle == nullptr)
+    return napi_invalid_arg;
+
+  delete remove_handle;
 
   return napi_ok;
 }

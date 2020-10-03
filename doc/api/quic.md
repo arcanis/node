@@ -212,7 +212,7 @@ session.on('stream', (stream) => {
 
 #### QuicStream headers
 
-Some QUIC application protocols (like HTTP/3) make use of headers.
+Some QUIC application protocols (like HTTP/3) use headers.
 
 There are four kinds of headers that the Node.js QUIC implementation
 is capable of handling dependent entirely on known application protocol
@@ -249,7 +249,7 @@ TBD
 
 ## QUIC JavaScript API
 
-### `net.createQuicSocket(\[options\])`
+### `net.createQuicSocket([options])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -288,11 +288,6 @@ added: REPLACEME
   * `validateAddress` {boolean} When `true`, the `QuicSocket` will use explicit
     address validation using a QUIC `RETRY` frame when listening for new server
     sessions. Default: `false`.
-  * `validateAddressLRU` {boolean} When `true`, validation will be skipped if
-    the address has been recently validated. Currently, only the 10 most
-    recently validated addresses are remembered. Setting `validateAddressLRU`
-    to `true`, will enable the `validateAddress` option as well. Default:
-    `false`.
 
 The `net.createQuicSocket()` function is used to create new `QuicSocket`
 instances associated with a local UDP address.
@@ -341,7 +336,7 @@ The object will contain the properties:
 
 If the `QuicEndpoint` is not bound, `quicendpoint.address` is an empty object.
 
-#### `quicendpoint.bind(\[options\])`
+#### `quicendpoint.bind([options])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -401,7 +396,7 @@ added: REPLACEME
 
 Set to `true` if the `QuicEndpoint` is in the process of closing.
 
-#### `quicendpoint.destroy(\[error\])`
+#### `quicendpoint.destroy([error])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -460,7 +455,7 @@ the local UDP port.
 added: REPLACEME
 -->
 
-#### `quicendpoint.setBroadcast(\[on\])`
+#### `quicendpoint.setBroadcast([on])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -557,7 +552,7 @@ A socket's address family's ANY address (IPv4 `'0.0.0.0'` or IPv6 `'::'`)
 can be used to return control of the sockets default outgoing interface to
 the system for future multicast packets.
 
-#### `quicendpoint.setMulticastLoopback(\[on\])`
+#### `quicendpoint.setMulticastLoopback([on])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -650,7 +645,7 @@ decrypted. It may be emitted multiple times per `QuicSession` instance.
 
 The callback will be invoked with a single argument:
 
-* `line` <Buffer> Line of ASCII text, in NSS SSLKEYLOGFILE format.
+* `line` {Buffer} Line of ASCII text, in NSS SSLKEYLOGFILE format.
 
 A typical use case is to append received lines to a common text file, which is
 later used by software (such as Wireshark) to decrypt the traffic:
@@ -849,7 +844,7 @@ added: REPLACEME
 
 Set to `true` if the `QuicSession` is in the process of a graceful shutdown.
 
-#### `quicsession.destroy(\[error\])`
+#### `quicsession.destroy([error])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -893,7 +888,7 @@ some properties corresponding to the fields of the certificate.
 If there is no local certificate, or if the `QuicSession` has been destroyed,
 an empty object will be returned.
 
-#### `quicsession.getPeerCertificate(\[detailed\])`
+#### `quicsession.getPeerCertificate([detailed])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -1030,7 +1025,7 @@ added: REPLACEME
 
 The minimum RTT recorded so far for this `QuicSession`.
 
-#### `quicsession.openStream(\[options\])`
+#### `quicsession.openStream([options])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -1188,23 +1183,6 @@ added: REPLACEME
 The `QuicClientSession` class implements the client side of a QUIC connection.
 Instances are created using the `quicsocket.connect()` method.
 
-#### Event: `'OCSPResponse'`
-<!-- YAML
-added: REPLACEME
--->
-
-Emitted when the `QuicClientSession` receives a requested OCSP certificate
-status response from the QUIC server peer.
-
-The callback is invoked with a single argument:
-
-* `response` {Buffer}
-
-Node.js does not perform any automatic validation or processing of the
-response.
-
-The `'OCSPResponse'` event will not be emitted more than once.
-
 #### Event: `'sessionTicket'`
 <!-- YAML
 added: REPLACEME
@@ -1268,12 +1246,16 @@ empty object when the key exchange is not ephemeral. The supported types are
 
 For example: `{ type: 'ECDH', name: 'prime256v1', size: 256 }`.
 
-#### `quicclientsession.setSocket(socket])`
+#### `quicclientsession.setSocket(socket[, natRebinding])`
 <!-- YAML
 added: REPLACEME
 -->
 
 * `socket` {QuicSocket} A `QuicSocket` instance to move this session to.
+* `natRebinding` {boolean} When `true`, indicates that the local address is to
+  be changed without triggering address validation. This will be rare and will
+  typically be used only to test resiliency in NAT rebind scenarios.
+  **Default**: `false`.
 * Returns: {Promise}
 
 Migrates the `QuicClientSession` to the given `QuicSocket` instance. If the new
@@ -1290,56 +1272,6 @@ added: REPLACEME
 The `QuicServerSession` class implements the server side of a QUIC connection.
 Instances are created internally and are emitted using the `QuicSocket`
 `'session'` event.
-
-#### Event: `'clientHello'`
-<!-- YAML
-added: REPLACEME
--->
-
-Emitted at the start of the TLS handshake when the `QuicServerSession` receives
-the initial TLS Client Hello.
-
-The event handler is given a callback function that *must* be invoked for the
-handshake to continue.
-
-The callback is invoked with four arguments:
-
-* `alpn` {string} The ALPN protocol identifier requested by the client.
-* `servername` {string} The SNI servername requested by the client.
-* `ciphers` {string[]} The list of TLS cipher algorithms requested by the
-  client.
-* `callback` {Function} A callback function that must be called in order for
-  the TLS handshake to continue.
-
-The `'clientHello'` event will not be emitted more than once.
-
-#### Event: `'OCSPRequest'`
-<!-- YAML
-added: REPLACEME
--->
-
-Emitted when the `QuicServerSession` has received a OCSP certificate status
-request as part of the TLS handshake.
-
-The callback is invoked with three arguments:
-
-* `servername` {string}
-* `context` {tls.SecureContext}
-* `callback` {Function}
-
-The callback *must* be invoked in order for the TLS handshake to continue.
-
-The `'OCSPRequest'` event will not be emitted more than once.
-
-#### `quicserversession.addContext(servername\[, context\])`
-<!-- YAML
-added: REPLACEME
--->
-
-* `servername` {string} A DNS name to associate with the given context.
-* `context` {tls.SecureContext} A TLS SecureContext to associate with the `servername`.
-
-TBD
 
 ### Class: `QuicSocket`
 <!-- YAML
@@ -1455,7 +1387,7 @@ server.listen();
 
 The `'session'` event will be emitted multiple times.
 
-The `'session'` event handler *may* be an async function.
+The `'session'` event handler can be an async function.
 
 If the `'session'` event handler throws an error, or if it returns a `Promise`
 that is rejected, the error will be handled by destroying the `QuicServerSession`
@@ -1512,6 +1444,24 @@ Creates and adds a new `QuicEndpoint` to the `QuicSocket` instance. An
 error will be thrown if `quicsock.addEndpoint()` is called either after
 the `QuicSocket` has already started binding to the local ports, or after
 the `QuicSocket` has been destroyed.
+
+#### `quicsocket.blockList`
+<!-- YAML
+added: REPLACEME
+-->
+
+* Type: {net.BlockList}
+
+A {net.BlockList} instance used to define rules for remote IPv4 or IPv6
+addresses that this `QuicSocket` is not permitted to interact with. The
+rules can be specified as either specific individual addresses, ranges
+of addresses, or CIDR subnet ranges.
+
+When listening as a server, if a packet is received from a blocked address,
+the packet will be ignored.
+
+When connecting as a client, if the remote IP address is blocked, the
+connection attempt will be rejected.
 
 #### `quicsocket.bound`
 <!-- YAML
@@ -1587,7 +1537,7 @@ permitted to close naturally. New `QuicClientSession` and `QuicServerSession`
 instances will not be allowed. The returns `Promise` will be resolved once
 the `QuicSocket` is destroyed.
 
-#### `quicsocket.connect(\[options\])`
+#### `quicsocket.connect([options])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -1681,6 +1631,7 @@ added: REPLACEME
     * `qpackBlockedStreams` {number}
     * `maxHeaderListSize` {number}
     * `maxPushes` {number}
+  * `ocspHandler` {Function} A function for handling [OCSP responses][].
   * `passphrase` {string} Shared passphrase used for a single private key and/or
     a PFX.
   * `pfx` {string|string[]|Buffer|Buffer[]|Object[]} PFX or PKCS12 encoded
@@ -1702,9 +1653,6 @@ added: REPLACEME
     `QuicClientSession` object.
   * `qlog` {boolean} Whether to enable ['qlog'][] for this session.
     Default: `false`.
-  * `requestOCSP` {boolean} If `true`, specifies that the OCSP status request
-    extension will be added to the client hello and an `'OCSPResponse'` event
-    will be emitted before establishing a secure communication.
   * `secureOptions` {number} Optionally affect the OpenSSL protocol behavior,
     which is not usually necessary. This should be used carefully if at all!
     Value is a numeric bitmask of the `SSL_OP_*` options from
@@ -1721,7 +1669,7 @@ added: REPLACEME
 
 Returns a `Promise` that resolves a new `QuicClientSession`.
 
-#### `quicsocket.destroy(\[error\])`
+#### `quicsocket.destroy([error])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -1764,7 +1712,7 @@ An array of `QuicEndpoint` instances associated with the `QuicSocket`.
 
 Read-only.
 
-#### `quicsocket.listen(\[options\])`
+#### `quicsocket.listen([options])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -1803,6 +1751,9 @@ added: REPLACEME
     uppercased in order for OpenSSL to accept them.
   * `clientCertEngine` {string} Name of an OpenSSL engine which can provide the
     client certificate.
+  * `clientHelloHandler` {Function} An async function that may be used to
+    set a {tls.SecureContext} for the given server name at the start of the
+    TLS handshake. See [Handling client hello][] for details.
   * `crl` {string|string[]|Buffer|Buffer[]} PEM formatted CRLs (Certificate
     Revocation Lists).
   * `defaultEncoding` {string} The default encoding that is used when no
@@ -1852,6 +1803,7 @@ added: REPLACEME
   * `maxStreamDataBidiLocal` {number}
   * `maxStreamDataBidiRemote` {number}
   * `maxStreamDataUni` {number}
+  * `ocspHandler` {Function} A function for handling [OCSP requests][].
   * `passphrase` {string} Shared passphrase used for a single private key
     and/or a PFX.
   * `pfx` {string|string[]|Buffer|Buffer[]|Object[]} PFX or PKCS12 encoded
@@ -2285,7 +2237,7 @@ The maximum received offset for this `QuicStream`.
 
 Read-only.
 
-#### `quicstream.pushStream(headers\[, options\])`
+#### `quicstream.pushStream(headers[, options])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -2335,7 +2287,7 @@ The `QuicServerSession` or `QuicClientSession` to which the
 
 Read-only.
 
-#### `quicstream.sendFD(fd\[, options\])`
+#### `quicstream.sendFD(fd[, options])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -2361,7 +2313,7 @@ Using the same file descriptor concurrently for multiple streams
 is not supported and may result in data loss. Re-using a file descriptor
 after a stream has finished is supported.
 
-#### `quicstream.sendFile(path\[, options\])`
+#### `quicstream.sendFile(path[, options])`
 <!-- YAML
 added: REPLACEME
 -->
@@ -2466,17 +2418,101 @@ async function myCustomLookup(address, type) {
 }
 ```
 
-[`crypto.getCurves()`]: crypto.html#crypto_crypto_getcurves
+### Online Certificate Status Protocol (OCSP)
+
+The QUIC implementation supports use of OCSP during the TLS 1.3 handshake
+of a new QUIC session.
+
+#### Requests
+
+A `QuicServerSession` can receive and process OCSP requests by setting the
+`ocspHandler` option in the `quicsocket.listen()` function. The value of
+the `ocspHandler` is an async function that must return an object with the
+OCSP response and, optionally, a new {tls.SecureContext} to use during the
+handshake.
+
+The handler function will be invoked with two arguments:
+
+* `type`: {string} Will always be `request` for `QuicServerSession`.
+* `options`: {Object}
+  * `servername` {string} The SNI server name.
+  * `context` {tls.SecureContext} The `SecureContext` currently used.
+
+```js
+async function ocspServerHandler(type, { servername, context }) {
+  // Process the request...
+  return { data: Buffer.from('The OCSP response') };
+}
+
+sock.listen({ ocspHandler: ocspServerHandler });
+```
+
+#### Responses
+
+A `QuicClientSession` can receive and process OCSP responses by setting the
+`ocspHandler` option in the `quicsocket.connect()` function. The value of
+the `ocspHandler` is an async function with no expected return value.
+
+The handler function will be invoked with two arguments:
+
+* `type`: {string} Will always be `response` for `QuicClientSession`.
+* `options`: {Object}
+  * `data`: {Buffer} The OCSP response provided by the server
+
+```js
+async function ocspClientHandler(type, { data }) {
+  console.log(data.toString());
+}
+
+sock.connect({ ocspHandler: ocspClientHandler });
+```
+
+### Handling client hello
+
+When `quicsocket.listen()` is called, a {tls.SecureContext} is created and used
+by default for all new `QuicServerSession` instances. There are times, however,
+when the {tls.SecureContext} to be used for a `QuicSession` can only be
+determined once the client initiates a connection. This is accomplished using
+the `clientHelloHandler` option when calling `quicsocket.listen()`.
+
+The value of `clientHelloHandler` is an async function that is called at the
+start of a new `QuicServerSession`. It is invoked with three arguments:
+
+* `alpn` {string} The ALPN protocol identifier specified by the client.
+* `servername` {string} The SNI server name specified by the client.
+* `ciphers` {string[]} The array of TLS 1.3 ciphers specified by the client.
+
+The `clientHelloHandler` can return a new {tls.SecureContext} object that will
+be used to continue the TLS handshake. If the function returns `undefined`, the
+default {tls.SecureContext} will be used. Returning any other value will cause
+an error to be thrown that will destroy the `QuicServerSession` instance.
+
+```js
+const server = createQuicSocket();
+
+server.listen({
+  async clientHelloHandler(alpn, servername, ciphers) {
+    console.log(alpn);
+    console.log(servername);
+    console.log(ciphers);
+  }
+});
+```
+
+[ALPN]: https://tools.ietf.org/html/rfc7301
+[Certificate Object]: https://nodejs.org/dist/latest-v12.x/docs/api/tls.html#tls_certificate_object
+[Handling client hello]: #quic_handling_client_hello
+[OCSP requests]: #quic_online_certificate_status_protocol_ocsp
+[OCSP responses]: #quic_online_certificate_status_protocol_ocsp
+[OpenSSL Options]: crypto.md#crypto_openssl_options
+[Perfect Forward Secrecy]: #tls_perfect_forward_secrecy
+[RFC 4007]: https://tools.ietf.org/html/rfc4007
+[`crypto.getCurves()`]: crypto.md#crypto_crypto_getcurves
 [`stream.Readable`]: #stream_class_stream_readable
 [`tls.DEFAULT_ECDH_CURVE`]: #tls_tls_default_ecdh_curve
-[`tls.getCiphers()`]: tls.html#tls_tls_getciphers
-[ALPN]: https://tools.ietf.org/html/rfc7301
-[RFC 4007]: https://tools.ietf.org/html/rfc4007
-[Certificate Object]: https://nodejs.org/dist/latest-v12.x/docs/api/tls.html#tls_certificate_object
+[`tls.getCiphers()`]: tls.md#tls_tls_getciphers
 [custom DNS lookup function]: #quic_custom_dns_lookup_functions
-[modifying the default cipher suite]: tls.html#tls_modifying_the_default_tls_cipher_suite
-[OpenSSL Options]: crypto.html#crypto_openssl_options
-[Perfect Forward Secrecy]: #tls_perfect_forward_secrecy
-[promisified version of `lookup()`]: dns.html#dns_dnspromises_lookup_hostname_options
+[modifying the default cipher suite]: tls.md#tls_modifying_the_default_tls_cipher_suite
+[promisified version of `lookup()`]: dns.md#dns_dnspromises_lookup_hostname_options
 ['qlog']: #quic_quicsession_qlog
 [qlog standard]: https://tools.ietf.org/id/draft-marx-qlog-event-definitions-quic-h3-00.html

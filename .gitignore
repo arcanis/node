@@ -39,6 +39,8 @@
 /*.msi
 /*.wixpdb
 /*.qlog
+# For GitHub Codespaces
+/pythonenv*
 
 # === Rules for artifacts of `./configure` ===
 /icu_config.gypi
@@ -130,6 +132,9 @@ _UpgradeReport_Files/
 /deps/uv/docs/src/guide/
 # Ignore dependencies fetched by deps/v8/tools/node/fetch_deps.py
 /deps/.cipd
+
+# === Rules for Windows vcbuild.bat ===
+/temp-vcbuild
 
 # === Global Rules ===
 # Keep last to avoid being excluded

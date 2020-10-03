@@ -1024,8 +1024,9 @@ pathToFileURL('/some/path%.c');    // Correct:   file:///some/path%25.c (POSIX)
 ```
 
 ## Legacy URL API
-
-> Stability: 0 - Deprecated: Use the WHATWG URL API instead.
+<!-- YAML
+deprecated: v11.0.0
+-->
 
 ### Legacy `urlObject`
 <!-- YAML
@@ -1034,6 +1035,8 @@ changes:
     pr-url: https://github.com/nodejs/node/pull/22715
     description: The Legacy URL API is deprecated. Use the WHATWG URL API.
 -->
+
+> Stability: 0 - Deprecated: Use the WHATWG URL API instead.
 
 The legacy `urlObject` (`require('url').Url`) is created and returned by the
 `url.parse()` function.
@@ -1145,10 +1148,12 @@ changes:
   - version: v7.0.0
     pr-url: https://github.com/nodejs/node/pull/7234
     description: URLs with a `file:` scheme will now always use the correct
-                 number of slashes regardless of `slashes` option. A false-y
+                 number of slashes regardless of `slashes` option. A falsy
                  `slashes` option with no protocol is now also respected at all
                  times.
 -->
+
+> Stability: 0 - Deprecated: Use the WHATWG URL API instead.
 
 * `urlObject` {Object|string} A URL object (as returned by `url.parse()` or
   constructed otherwise). If a string, it is converted to an object by passing
@@ -1244,6 +1249,8 @@ changes:
                  when no query string is present.
 -->
 
+> Stability: 0 - Deprecated: Use the WHATWG URL API instead.
+
 * `urlString` {string} The URL string to parse.
 * `parseQueryString` {boolean} If `true`, the `query` property will always
   be set to an object returned by the [`querystring`][] module's `parse()`
@@ -1287,6 +1294,8 @@ changes:
     description: The `auth` fields is cleared now the `to` parameter
                  contains a hostname.
 -->
+
+> Stability: 0 - Deprecated: Use the WHATWG URL API instead.
 
 * `from` {string} The Base URL being resolved against.
 * `to` {string} The HREF URL being resolved.
@@ -1361,14 +1370,18 @@ console.log(myURL.origin);
 // Prints https://xn--1xa.example.com
 ```
 
-[`Error`]: errors.html#errors_class_error
+[ICU]: intl.md#intl_options_for_building_node_js
+[Punycode]: https://tools.ietf.org/html/rfc5891#section-4.4
+[WHATWG URL Standard]: https://url.spec.whatwg.org/
+[WHATWG URL]: #url_the_whatwg_url_api
+[`Error`]: errors.md#errors_class_error
 [`JSON.stringify()`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify
 [`Map`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map
-[`TypeError`]: errors.html#errors_class_typeerror
+[`TypeError`]: errors.md#errors_class_typeerror
 [`URLSearchParams`]: #url_class_urlsearchparams
 [`array.toString()`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/toString
 [`new URL()`]: #url_new_url_input_base
-[`querystring`]: querystring.html
+[`querystring`]: querystring.md
 [`require('url').format()`]: #url_url_format_url_options
 [`url.domainToASCII()`]: #url_url_domaintoascii_domain
 [`url.domainToUnicode()`]: #url_url_domaintounicode_domain
@@ -1380,10 +1393,6 @@ console.log(myURL.origin);
 [`url.toString()`]: #url_url_tostring
 [`urlSearchParams.entries()`]: #url_urlsearchparams_entries
 [`urlSearchParams@@iterator()`]: #url_urlsearchparams_symbol_iterator
-[ICU]: intl.html#intl_options_for_building_node_js
-[Punycode]: https://tools.ietf.org/html/rfc5891#section-4.4
-[WHATWG URL Standard]: https://url.spec.whatwg.org/
-[WHATWG URL]: #url_the_whatwg_url_api
 [examples of parsed URLs]: https://url.spec.whatwg.org/#example-url-parsing
 [host name spoofing]: https://hackerone.com/reports/678487
 [legacy `urlObject`]: #url_legacy_urlobject

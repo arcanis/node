@@ -13,6 +13,7 @@
     'node_use_bundled_v8%': 'true',
     'node_shared%': 'false',
     'force_dynamic_crt%': 0,
+    'ossfuzz' : 'false',
     'node_module_version%': '',
     'node_shared_brotli%': 'false',
     'node_shared_zlib%': 'false',
@@ -106,6 +107,7 @@
       'lib/internal/assert/assertion_error.js',
       'lib/internal/assert/calltracker.js',
       'lib/internal/async_hooks.js',
+      'lib/internal/blocklist.js',
       'lib/internal/buffer.js',
       'lib/internal/cli_table.js',
       'lib/internal/child_process.js',
@@ -234,6 +236,11 @@
       'lib/internal/streams/duplexpair.js',
       'lib/internal/streams/from.js',
       'lib/internal/streams/legacy.js',
+      'lib/internal/streams/readable.js',
+      'lib/internal/streams/writable.js',
+      'lib/internal/streams/duplex.js',
+      'lib/internal/streams/passthrough.js',
+      'lib/internal/streams/transform.js',
       'lib/internal/streams/destroy.js',
       'lib/internal/streams/state.js',
       'lib/internal/streams/pipeline.js',
@@ -259,6 +266,7 @@
       'deps/acorn-plugins/acorn-private-class-elements/index.js',
       'deps/acorn-plugins/acorn-private-methods/index.js',
       'deps/acorn-plugins/acorn-static-class-features/index.js',
+      'deps/cjs-module-lexer/lexer.js',
     ],
     'node_mksnapshot_exec': '<(PRODUCT_DIR)/<(EXECUTABLE_PREFIX)node_mksnapshot<(EXECUTABLE_SUFFIX)',
     'mkcodecache_exec': '<(PRODUCT_DIR)/<(EXECUTABLE_PREFIX)mkcodecache<(EXECUTABLE_SUFFIX)',
@@ -660,6 +668,7 @@
         'src/base_object.h',
         'src/base_object-inl.h',
         'src/base64.h',
+        'src/base64-inl.h',
         'src/callback_queue.h',
         'src/callback_queue-inl.h',
         'src/connect_wrap.h',
@@ -1168,6 +1177,38 @@
         } ],
       ]
     }, # specialize_node_d
+    { # fuzz_url
+      'target_name': 'fuzz_url',
+      'type': 'executable',
+      'dependencies': [
+        '<(node_lib_target_name)',
+      ],
+      'includes': [
+        'node.gypi'
+      ],
+      'include_dirs': [
+        'src',
+      ],
+      'defines': [
+        'NODE_ARCH="<(target_arch)"',
+        'NODE_PLATFORM="<(OS)"',
+        'NODE_WANT_INTERNALS=1',
+      ],
+      'sources': [
+        'src/node_snapshot_stub.cc',
+        'src/node_code_cache_stub.cc',
+        'test/fuzzers/fuzz_url.cc',
+      ],
+      'conditions': [
+        ['OS=="linux"', {
+          'ldflags': [ '-fsanitize=fuzzer' ]
+        }],
+        # Ensure that ossfuzz flag has been set and that we are on Linux
+        [ 'OS!="linux" or ossfuzz!="true"', {
+          'type': 'none',
+        }],
+      ],
+    }, # fuzz_url
     {
       'target_name': 'cctest',
       'type': 'executable',
@@ -1235,8 +1276,7 @@
           ],
           'sources': [
             'test/cctest/test_quic_buffer.cc',
-            'test/cctest/test_quic_cid.cc',
-            'test/cctest/test_quic_verifyhostnameidentity.cc'
+            'test/cctest/test_quic_cid.cc'
           ]
         }],
         ['v8_enable_inspector==1', {

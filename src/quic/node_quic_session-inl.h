@@ -50,6 +50,8 @@ void QuicSessionConfig::set_original_connection_id(
     transport_params.original_dcid = *ocid;
     transport_params.retry_scid = *scid;
     transport_params.retry_scid_present = 1;
+  } else {
+    transport_params.original_dcid = *scid;
   }
 }
 
@@ -107,17 +109,6 @@ ngtcp2_crypto_level QuicCryptoContext::write_crypto_level() const {
 void QuicCryptoContext::Keylog(const char* line) {
   if (UNLIKELY(session_->state_->keylog_enabled))
     session_->listener()->OnKeylog(line, strlen(line));
-}
-
-void QuicCryptoContext::OnClientHelloDone() {
-  // Continue the TLS handshake when this function exits
-  // otherwise it will stall and fail.
-  TLSHandshakeScope handshake_scope(
-      this,
-      [&]() { set_in_client_hello(false); });
-
-  // Disable the callback at this point so we don't loop continuously
-  session_->state_->client_hello_enabled = 0;
 }
 
 // Following a pause in the handshake for OCSP or client hello, we kickstart

@@ -152,6 +152,7 @@ constexpr size_t kFsStatsBufferLength =
   V(contextify_context_private_symbol, "node:contextify:context")             \
   V(contextify_global_private_symbol, "node:contextify:global")               \
   V(decorated_private_symbol, "node:decorated")                               \
+  V(napi_type_tag, "node:napi:type_tag")                                      \
   V(napi_wrapper, "node:napi:wrapper")                                        \
   V(untransferable_object_private_symbol, "node:untransferableObject")        \
 
@@ -181,6 +182,7 @@ constexpr size_t kFsStatsBufferLength =
   V(asn1curve_string, "asn1Curve")                                             \
   V(async_ids_stack_string, "async_ids_stack")                                 \
   V(bits_string, "bits")                                                       \
+  V(block_list_string, "blockList")                                            \
   V(buffer_string, "buffer")                                                   \
   V(bytes_parsed_string, "bytesParsed")                                        \
   V(bytes_read_string, "bytesRead")                                            \
@@ -422,6 +424,7 @@ constexpr size_t kFsStatsBufferLength =
   V(async_wrap_object_ctor_template, v8::FunctionTemplate)                     \
   V(base_object_ctor_template, v8::FunctionTemplate)                           \
   V(binding_data_ctor_template, v8::FunctionTemplate)                          \
+  V(blocklist_instance_template, v8::ObjectTemplate)                           \
   V(compiled_fn_entry_template, v8::ObjectTemplate)                            \
   V(dir_instance_template, v8::ObjectTemplate)                                 \
   V(fd_constructor_template, v8::ObjectTemplate)                               \
@@ -1065,6 +1068,9 @@ class Environment : public MemoryRetainer {
   void PrintSyncTrace() const;
   inline void set_trace_sync_io(bool value);
 
+  inline void set_force_context_aware(bool value);
+  inline bool force_context_aware() const;
+
   // This stores whether the --abort-on-uncaught-exception flag was passed
   // to Node.
   inline bool abort_on_uncaught_exception() const;
@@ -1154,8 +1160,6 @@ class Environment : public MemoryRetainer {
 
   inline bool filehandle_close_warning() const;
   inline void set_filehandle_close_warning(bool on);
-  inline bool emit_insecure_umask_warning() const;
-  inline void set_emit_insecure_umask_warning(bool on);
 
   inline void set_source_maps_enabled(bool on);
   inline bool source_maps_enabled() const;
@@ -1380,7 +1384,6 @@ class Environment : public MemoryRetainer {
   bool emit_env_nonstring_warning_ = true;
   bool emit_err_name_warning_ = true;
   bool emit_filehandle_warning_ = true;
-  bool emit_insecure_umask_warning_ = true;
   bool source_maps_enabled_ = false;
 
   size_t async_callback_scope_depth_ = 0;

@@ -35,6 +35,7 @@ the `node` and `v8` C++ namespaces, respectively.
 
 ```cpp
 int main(int argc, char** argv) {
+  argv = uv_setup_args(argc, argv);
   std::vector<std::string> args(argv, argv + argc);
   std::vector<std::string> exec_args;
   std::vector<std::string> errors;
@@ -219,8 +220,8 @@ int RunNodeInstance(MultiIsolatePlatform* platform,
 }
 ```
 
-[`process.memoryUsage()`]: process.html#process_process_memoryusage
-[CLI options]: cli.html
-[deprecation policy]: deprecations.html
+[CLI options]: cli.md
+[`process.memoryUsage()`]: process.md#process_process_memoryusage
+[deprecation policy]: deprecations.md
 [embedtest.cc]: https://github.com/nodejs/node/blob/master/test/embedding/embedtest.cc
 [src/node.h]: https://github.com/nodejs/node/blob/master/src/node.h

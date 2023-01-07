@@ -264,8 +264,8 @@ The `zlib` library provides ways to compress individual objects, but not to
 aggregate multiple ones into a single file suitable for redistribution (what
 is often called archival).
 
-To this end, `node:zip` provides the `ZipArchive` class which allows to create,
-read, and modify zip archives:
+To this end, `node:zlib` provides the `ZipArchive` class which allows to
+create, read, and modify zip archives:
 
 ```js
 const fs = require('node:fs');

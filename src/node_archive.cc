@@ -2,7 +2,6 @@
 #include <vector>
 
 #include "async_wrap.h"
-#include "env.h"
 #include "env-inl.h"
 #include "node_binding.h"
 #include "node_buffer.h"
@@ -13,20 +12,22 @@
 #include "zip.h"
 #include "v8.h"
 
-#define CHECK_ZIP_ARCHIVE_ERR(zip, action, expr)                                                        \
-  do {                                                                                                  \
-    if (UNLIKELY(!(expr))) {                                                                            \
-      THROW_ERR_LIBZIP_ERROR(env, "Zip " action " failed: %s", zip_error_strerror(zip_get_error(zip))); \
-      return;                                                                                           \
-    }                                                                                                   \
+#define CHECK_ZIP_ARCHIVE_ERR(zip, action, expr)               \
+  do {                                                         \
+    if (UNLIKELY(!(expr))) {                                   \
+      THROW_ERR_LIBZIP_ERROR(env, "Zip " action " failed: %s", \
+        zip_error_strerror(zip_get_error(zip)));               \
+      return;                                                  \
+    }                                                          \
   } while (0)
 
-#define CHECK_ZIP_FILE_ERR(file, action, expr)                                                                \
-  do {                                                                                                        \
-    if (UNLIKELY(!(expr))) {                                                                                  \
-      THROW_ERR_LIBZIP_ERROR(env, "Zip " action " failed: %s", zip_error_strerror(zip_file_get_error(file))); \
-      return;                                                                                                 \
-    }                                                                                                         \
+#define CHECK_ZIP_FILE_ERR(file, action, expr)                 \
+  do {                                                         \
+    if (UNLIKELY(!(expr))) {                                   \
+      THROW_ERR_LIBZIP_ERROR(env, "Zip " action " failed: %s", \
+        zip_error_strerror(zip_file_get_error(file)));         \
+      return;                                                  \
+    }                                                          \
   } while (0)
 
 namespace node {
@@ -47,7 +48,13 @@ struct ZipCompContext {
   zip_uint32_t crc;
   zip_uint32_t compression_method;
 
-  static zip_int64_t layer_callback(zip_source_t* src, void *ud, void* data, zip_uint64_t length, zip_source_cmd_t command) {
+  static zip_int64_t layer_callback(
+    zip_source_t* src,
+    void* ud,
+    void* data,
+    zip_uint64_t length,
+    zip_source_cmd_t command
+  ) {
     ZipCompContext* ctx = static_cast<ZipCompContext*>(ud);
 
     switch (command) {
@@ -56,7 +63,7 @@ struct ZipCompContext {
       return 0;
 
     case ZIP_SOURCE_STAT: {
-      zip_stat_t *st = static_cast<zip_stat_t*>(data);
+      zip_stat_t* st = static_cast<zip_stat_t*>(data);
       if (st->valid & ZIP_STAT_SIZE) {
           st->comp_size = st->size;
           st->valid |= ZIP_STAT_COMP_SIZE;
@@ -83,13 +90,20 @@ class ZipArchive final : public BaseObject {
     kInternalFieldCount = BaseObject::kInternalFieldCount,
   };
 
-  ZipArchive(Environment* env, v8::Local<v8::Object> obj, std::vector<char>&& buf);
+  ZipArchive(
+    Environment* env,
+    v8::Local<v8::Object> obj,
+    std::vector<char>&& buf);
+
   ~ZipArchive();
 
   void MemoryInfo(MemoryTracker* tracker) const override;
 
-  static ZipArchive* CheckZip(const v8::FunctionCallbackInfo<v8::Value>& args);
-  static std::pair<ZipArchive*, zip_uint32_t> CheckZipEntry(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static ZipArchive* CheckZip(
+    const v8::FunctionCallbackInfo<v8::Value>& args);
+
+  static std::pair<ZipArchive*, zip_uint32_t> CheckZipEntry(
+    const v8::FunctionCallbackInfo<v8::Value>& args);
 
   static void GetEntries(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void AddDirectory(const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -112,9 +126,11 @@ class ZipArchive final : public BaseObject {
   SET_SELF_SIZE(ZipArchive)
 };
 
-ZipArchive::ZipArchive(Environment* env, v8::Local<v8::Object> obj, std::vector<char>&& buf)
-    : BaseObject(env, obj)
-    , buf_(std::move(buf)) {
+ZipArchive::ZipArchive(
+  Environment* env,
+  v8::Local<v8::Object> obj,
+  std::vector<char>&& buf
+) : BaseObject(env, obj), buf_(std::move(buf)) {
   MakeWeak();
 
   mem_usage_ += buf.size();
@@ -175,10 +191,17 @@ void ZipArchive::GetEntries(const v8::FunctionCallbackInfo<v8::Value>& args) {
       v8::Integer::New(isolate, with_file_types ? zip->GetFileType(t) : 0)
     };
 
-    entries[t] = v8::Array::New(isolate, &entry_items[0], arraysize(entry_items));
+    entries[t] = v8::Array::New(
+      isolate,
+      &entry_items[0],
+      arraysize(entry_items));
   }
 
-  args.GetReturnValue().Set(v8::Array::New(isolate, &entries[0], entries.size()));
+  args.GetReturnValue().Set(
+    v8::Array::New(
+      isolate,
+      &entries[0],
+      entries.size()));
 }
 
 void ZipArchive::AddDirectory(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -220,7 +243,11 @@ void ZipArchive::AddEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
   char* buffer_copy = Malloc(buffer_length);
   memcpy(buffer_copy, buffer_data, buffer_length);
 
-  zip_source_t* file_source = zip_source_buffer(zip->zip_, buffer_copy, buffer_length, 1);
+  zip_source_t* file_source = zip_source_buffer(
+    zip->zip_,
+    buffer_copy,
+    buffer_length,
+    1);
   CHECK_NOT_NULL(file_source);
 
   CHECK(IsSafeJsInt(args[3]));
@@ -234,10 +261,18 @@ void ZipArchive::AddEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
   zip_comp_ctx->uncompressed_size = size;
   zip_comp_ctx->crc = crc;
 
-  zip_source_t* file_comp_source = zip_source_layered_create(file_source, &ZipCompContext::layer_callback, zip_comp_ctx, &zip->error_);
+  zip_source_t* file_comp_source = zip_source_layered_create(
+    file_source,
+    &ZipCompContext::layer_callback,
+    zip_comp_ctx,
+    &zip->error_);
   CHECK_NOT_NULL(file_comp_source);
 
-  zip_int64_t file_index = zip_file_add(zip->zip_, *path, file_comp_source, ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
+  zip_int64_t file_index = zip_file_add(
+    zip->zip_,
+    *path,
+    file_comp_source,
+    ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
   CHECK_GE(file_index, 0);
   CHECK_LE(file_index, std::numeric_limits<uint32_t>::max());
 
@@ -246,7 +281,8 @@ void ZipArchive::AddEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
   args.GetReturnValue().Set(static_cast<uint32_t>(file_index));
 }
 
-ZipArchive* ZipArchive::CheckZip(const v8::FunctionCallbackInfo<v8::Value>& args) {
+ZipArchive* ZipArchive::CheckZip(
+  const v8::FunctionCallbackInfo<v8::Value>& args) {
   ZipArchive* zip;
 
   CHECK_NOT_NULL(zip = Unwrap<ZipArchive>(args.Holder()));
@@ -256,7 +292,8 @@ ZipArchive* ZipArchive::CheckZip(const v8::FunctionCallbackInfo<v8::Value>& args
   return zip;
 }
 
-std::pair<ZipArchive*, zip_uint32_t> ZipArchive::CheckZipEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
+std::pair<ZipArchive*, zip_uint32_t> ZipArchive::CheckZipEntry(
+  const v8::FunctionCallbackInfo<v8::Value>& args) {
   ZipArchive* zip = ZipArchive::CheckZip(args);
 
   const int argc = args.Length();
@@ -301,7 +338,11 @@ void ZipArchive::ReadEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
     Buffer::New(isolate, data, read_length).ToLocalChecked(),
   };
 
-  args.GetReturnValue().Set(v8::Array::New(isolate, &result[0], arraysize(result)));
+  args.GetReturnValue().Set(
+    v8::Array::New(
+      isolate,
+      &result[0],
+      arraysize(result)));
 }
 
 void ZipArchive::StatEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -316,7 +357,14 @@ void ZipArchive::StatEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
   zip_uint8_t opsys;
   zip_uint32_t attributes;
-  CHECK_EQ(zip_file_get_external_attributes(zip->zip_, index, 0, &opsys, &attributes), 0);
+  CHECK_EQ(
+    zip_file_get_external_attributes(
+      zip->zip_,
+      index,
+      0,
+      &opsys,
+      &attributes),
+    0);
 
   v8::Local<v8::Value> result[] = {
     v8::Integer::NewFromUnsigned(isolate, file_stat.size),
@@ -328,7 +376,11 @@ void ZipArchive::StatEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
     v8::Integer::NewFromUnsigned(isolate, attributes),
   };
 
-  args.GetReturnValue().Set(v8::Array::New(isolate, &result[0], arraysize(result)));
+  args.GetReturnValue().Set(
+    v8::Array::New(
+      isolate,
+      &result[0],
+      arraysize(result)));
 }
 
 void ZipArchive::RestatEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -343,10 +395,15 @@ void ZipArchive::RestatEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args[1]->IsObject());
   v8::Local<v8::Object> stats = args[1]->ToObject(ctx).ToLocalChecked();
 
-  v8::Local<v8::Value> mtime = stats->Get(ctx, v8::String::NewFromUtf8Literal(isolate, "mtime"))
-    .ToLocalChecked();
-  v8::Local<v8::Value> opsys = stats->Get(ctx, v8::String::NewFromUtf8Literal(isolate, "opsys"))
-    .ToLocalChecked();
+  v8::Local<v8::Value> mtime = stats->Get(
+    ctx,
+    v8::String::NewFromUtf8Literal(isolate, "mtime"))
+      .ToLocalChecked();
+
+  v8::Local<v8::Value> opsys = stats->Get(
+    ctx,
+    v8::String::NewFromUtf8Literal(isolate, "opsys"))
+      .ToLocalChecked();
 
   if (!mtime->IsUndefined()) {
     CHECK(IsSafeJsInt(mtime));
@@ -356,8 +413,10 @@ void ZipArchive::RestatEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
   }
 
   if (!opsys->IsUndefined()) {
-    v8::Local<v8::Value> attributes = stats->Get(ctx, v8::String::NewFromUtf8Literal(isolate, "attributes"))
-      .ToLocalChecked();
+    v8::Local<v8::Value> attributes = stats->Get(
+      ctx,
+      v8::String::NewFromUtf8Literal(isolate, "attributes"))
+        .ToLocalChecked();
 
     CHECK(IsSafeJsInt(opsys));
     zip_uint8_t opsys_val = opsys.As<v8::Integer>()->Value();
@@ -368,7 +427,14 @@ void ZipArchive::RestatEntry(const v8::FunctionCallbackInfo<v8::Value>& args) {
       attributes_val = attributes.As<v8::Integer>()->Value();
     }
 
-    CHECK_EQ(zip_file_set_external_attributes(zip->zip_, index, 0, opsys_val, attributes_val), 0);
+    CHECK_EQ(
+      zip_file_set_external_attributes(
+        zip->zip_,
+        index,
+        0,
+        opsys_val,
+        attributes_val),
+      0);
   }
 }
 
@@ -384,9 +450,10 @@ void ZipArchive::Digest(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
   int open_res = zip_source_open(zip->source_);
   if (open_res != 0) {
-    // Libzip purges the source when the file would be empty. We don't want this
-    // behaviour (users can just check themselves before saving, if that's what
-    // they want to do), so we check and return a predefined buffer if needed.
+    // Libzip purges the source when the file would be empty. We don't want
+    // this behaviour (users can just check themselves before saving, if
+    // that's what they want to do), so we check and return a predefined
+    // buffer if needed.
     zip_error_t* error = zip_source_error(zip->source_);
     CHECK_EQ(error->zip_err, ZIP_ER_DELETED);
 
@@ -412,7 +479,14 @@ void ZipArchive::Digest(const v8::FunctionCallbackInfo<v8::Value>& args) {
 int ZipArchive::GetFileType(zip_uint64_t index) const {
   zip_uint8_t opsys;
   zip_uint32_t attributes;
-  CHECK_EQ(zip_file_get_external_attributes(zip_, index, 0, &opsys, &attributes), 0);
+  CHECK_EQ(
+    zip_file_get_external_attributes(
+      zip_,
+      index,
+      0,
+      &opsys,
+      &attributes),
+    0);
 
   return opsys == ZIP_OPSYS_UNIX ? (attributes >> 16) & 0xf000 : 0;
 }
@@ -447,7 +521,10 @@ void Initialize(v8::Local<v8::Object> target,
   Environment* env = Environment::GetCurrent(context);
   v8::Isolate* isolate = env->isolate();
 
-  v8::Local<v8::FunctionTemplate> zip = NewFunctionTemplate(isolate, NewZipArchive);
+  v8::Local<v8::FunctionTemplate> zip = NewFunctionTemplate(
+    isolate,
+    NewZipArchive);
+
   SetProtoMethod(isolate, zip, "getEntries", ZipArchive::GetEntries);
   SetProtoMethod(isolate, zip, "addDirectory", ZipArchive::AddDirectory);
   SetProtoMethod(isolate, zip, "addEntry", ZipArchive::AddEntry);
@@ -456,7 +533,10 @@ void Initialize(v8::Local<v8::Object> target,
   SetProtoMethod(isolate, zip, "statEntry", ZipArchive::StatEntry);
   SetProtoMethod(isolate, zip, "restatEntry", ZipArchive::RestatEntry);
   SetProtoMethod(isolate, zip, "digest", ZipArchive::Digest);
-  zip->InstanceTemplate()->SetInternalFieldCount(ZipArchive::kInternalFieldCount);
+
+  zip->InstanceTemplate()
+    ->SetInternalFieldCount(ZipArchive::kInternalFieldCount);
+
   SetConstructorFunction(env->context(), target, "ZipArchive", zip);
 }
 
@@ -472,7 +552,7 @@ void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
   registry->Register(ZipArchive::Digest);
 }
 
-}  // namespace archive
+}  // namespace
 
 }  // end namespace node
 

@@ -57,6 +57,7 @@ class ExternalReferenceRegistry {
 };
 
 #define EXTERNAL_REFERENCE_BINDING_LIST_BASE(V)                                \
+  V(archive)                                                                   \
   V(async_wrap)                                                                \
   V(binding)                                                                   \
   V(blob)                                                                      \

@@ -8,14 +8,6 @@
       ]
     }
   },
-  "Event-constructors.any.js": {
-    "fail": {
-      "expected": [
-        "Untitled 2",
-        "Untitled 3"
-      ]
-    }
-  },
   "Event-dispatch-listener-order.window.js": {
     "skip": "document is not defined"
   },

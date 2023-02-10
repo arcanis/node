@@ -267,6 +267,21 @@ int ReadFileSync(std::string* result, const char* path) {
   return 0;
 }
 
+std::vector<char> ReadFileSync(FILE* fp) {
+  CHECK_EQ(ftell(fp), 0);
+  int err = fseek(fp, 0, SEEK_END);
+  CHECK_EQ(err, 0);
+  size_t size = ftell(fp);
+  CHECK_NE(size, static_cast<size_t>(-1L));
+  err = fseek(fp, 0, SEEK_SET);
+  CHECK_EQ(err, 0);
+
+  std::vector<char> contents(size);
+  size_t num_read = fread(contents.data(), size, 1, fp);
+  CHECK_EQ(num_read, 1);
+  return contents;
+}
+
 void DiagnosticFilename::LocalTime(TIME_TYPE* tm_struct) {
 #ifdef _WIN32
   GetLocalTime(tm_struct);
@@ -513,6 +528,68 @@ void SetConstructorFunction(Isolate* isolate,
   if (LIKELY(flag == SetConstructorFunctionFlag::SET_CLASS_NAME))
     tmpl->SetClassName(name);
   that->Set(name, tmpl);
+}
+
+namespace {
+
+class NonOwningExternalOneByteResource
+    : public v8::String::ExternalOneByteStringResource {
+ public:
+  explicit NonOwningExternalOneByteResource(const UnionBytes& source)
+      : source_(source) {}
+  ~NonOwningExternalOneByteResource() override = default;
+
+  const char* data() const override {
+    return reinterpret_cast<const char*>(source_.one_bytes_data());
+  }
+  size_t length() const override { return source_.length(); }
+
+  NonOwningExternalOneByteResource(const NonOwningExternalOneByteResource&) =
+      delete;
+  NonOwningExternalOneByteResource& operator=(
+      const NonOwningExternalOneByteResource&) = delete;
+
+ private:
+  const UnionBytes source_;
+};
+
+class NonOwningExternalTwoByteResource
+    : public v8::String::ExternalStringResource {
+ public:
+  explicit NonOwningExternalTwoByteResource(const UnionBytes& source)
+      : source_(source) {}
+  ~NonOwningExternalTwoByteResource() override = default;
+
+  const uint16_t* data() const override { return source_.two_bytes_data(); }
+  size_t length() const override { return source_.length(); }
+
+  NonOwningExternalTwoByteResource(const NonOwningExternalTwoByteResource&) =
+      delete;
+  NonOwningExternalTwoByteResource& operator=(
+      const NonOwningExternalTwoByteResource&) = delete;
+
+ private:
+  const UnionBytes source_;
+};
+
+}  // anonymous namespace
+
+Local<String> UnionBytes::ToStringChecked(Isolate* isolate) const {
+  if (UNLIKELY(length() == 0)) {
+    // V8 requires non-null data pointers for empty external strings,
+    // but we don't guarantee that. Solve this by not creating an
+    // external string at all in that case.
+    return String::Empty(isolate);
+  }
+  if (is_one_byte()) {
+    NonOwningExternalOneByteResource* source =
+        new NonOwningExternalOneByteResource(*this);
+    return String::NewExternalOneByte(isolate, source).ToLocalChecked();
+  } else {
+    NonOwningExternalTwoByteResource* source =
+        new NonOwningExternalTwoByteResource(*this);
+    return String::NewExternalTwoByte(isolate, source).ToLocalChecked();
+  }
 }
 
 }  // namespace node

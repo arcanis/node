@@ -5138,10 +5138,26 @@ For code running using Node.js APIs, converting between base64-encoded strings
 and binary data should be performed using `Buffer.from(str, 'base64')` and
 `buf.toString('base64')`.**
 
+### `buffer.isAscii(input)`
+
+<!-- YAML
+added: v19.6.0
+-->
+
+* input {Buffer | ArrayBuffer | TypedArray} The input to validate.
+* Returns: {boolean}
+
+This function returns `true` if `input` contains only valid ASCII-encoded data,
+including the case in which `input` is empty.
+
+Throws if the `input` is a detached array buffer.
+
 ### `buffer.isUtf8(input)`
 
 <!-- YAML
-added: REPLACEME
+added:
+  - v19.4.0
+  - v18.14.0
 -->
 
 * input {Buffer | ArrayBuffer | TypedArray} The input to validate.

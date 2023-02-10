@@ -69,6 +69,10 @@ inline MultiIsolatePlatform* IsolateData::platform() const {
   return platform_;
 }
 
+inline const SnapshotData* IsolateData::snapshot_data() const {
+  return snapshot_data_;
+}
+
 inline void IsolateData::set_worker_context(worker::Worker* context) {
   CHECK_NULL(worker_context_);  // Should be set only once.
   worker_context_ = context;
@@ -434,6 +438,20 @@ inline bool Environment::inside_should_not_abort_on_uncaught_scope() const {
 
 inline std::vector<double>* Environment::destroy_async_id_list() {
   return &destroy_async_id_list_;
+}
+
+inline builtins::BuiltinLoader* Environment::builtin_loader() {
+  return &builtin_loader_;
+}
+
+inline const StartExecutionCallback&
+Environment::embedder_mksnapshot_entry_point() const {
+  return embedder_mksnapshot_entry_point_;
+}
+
+inline void Environment::set_embedder_mksnapshot_entry_point(
+    StartExecutionCallback&& fn) {
+  embedder_mksnapshot_entry_point_ = std::move(fn);
 }
 
 inline double Environment::new_async_id() {
@@ -803,11 +821,6 @@ void Environment::AddCleanupHook(CleanupQueue::Callback fn, void* arg) {
 
 void Environment::RemoveCleanupHook(CleanupQueue::Callback fn, void* arg) {
   cleanup_queue_.Remove(fn, arg);
-}
-
-void Environment::set_main_utf16(std::unique_ptr<v8::String::Value> str) {
-  CHECK(!main_utf16_);
-  main_utf16_ = std::move(str);
 }
 
 void Environment::set_process_exit_handler(

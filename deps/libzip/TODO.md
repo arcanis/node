@@ -1,5 +1,19 @@
 ## Before next release
 
+- fix warnings with OpenSSL 3.0
+
+### Layered Sources
+
+- `zip_source_layered` should take ownership of lower source. (`zip_source_window` does not and is part of the public API, so keep it that way.) Document both.
+
+### Torrentzip
+
+- check mtime, extra fields, ... in cdir (and local entries?)
+- Add tests
+- Document
+- Handle data sources with unknown uncompressed size.
+- Handle when uncompressed size < 4GB but compressed size > 4GB.
+
 ## Other
 
 - split `zip_source_t` in main part and reference so we can keep track which reference called open and we can invalidate references if the underlying source gets invalidated (e. g. by `zip_close`). 

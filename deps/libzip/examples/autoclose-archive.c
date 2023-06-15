@@ -120,7 +120,7 @@ main(int argc, char *argv[]) {
         exit(1);
 
     }
-    if ((src = zip_source_zip(z_source, z_source, index, 0, 0, -1)) == NULL) {
+    if ((src = zip_source_zip_file(z_source, z_source, index, 0, 0, -1, NULL)) == NULL) {
         fprintf(stderr, "%s: cannot open file '%s' in '%s': %s\n", argv[0], source_file, source_archive, zip_strerror(z_source));
         zip_discard(z_source);
         exit(1);
@@ -138,12 +138,12 @@ main(int argc, char *argv[]) {
         zip_error_init_with_code(&error, err);
         fprintf(stderr, "%s: cannot open zip archive '%s': %s\n", argv[0], destination_archive, zip_error_strerror(&error));
         zip_error_fini(&error);
-        zip_source_free(src_autoclose); // freeing src_autoclose closes z_source
+        zip_source_free(src_autoclose); /* freeing src_autoclose closes z_source */
         exit(1);
     }
 
 
-    if ((zip_add(z_destination, source_file, src_autoclose)) < 0) {
+    if ((zip_file_add(z_destination, source_file, src_autoclose, 0)) < 0) {
         fprintf(stderr, "%s: cannot add file: %s\n", argv[0], zip_strerror(z_source));
         zip_source_free(src_autoclose);
         zip_discard(z_destination);

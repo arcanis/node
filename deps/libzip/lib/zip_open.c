@@ -32,6 +32,7 @@
 */
 
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,7 @@
 typedef enum { EXISTS_ERROR = -1, EXISTS_NOT = 0, EXISTS_OK } exists_t;
 static zip_t *_zip_allocate_new(zip_source_t *src, unsigned int flags, zip_error_t *error);
 static zip_int64_t _zip_checkcons(zip_t *za, zip_cdir_t *cdir, zip_error_t *error);
+static void zip_check_torrentzip(zip_t *za, const zip_cdir_t *cdir);
 static zip_cdir_t *_zip_find_central_dir(zip_t *za, zip_uint64_t len);
 static exists_t _zip_file_exists(zip_source_t *src, zip_error_t *error);
 static int _zip_headercomp(const zip_dirent_t *, const zip_dirent_t *);
@@ -181,7 +183,16 @@ _zip_open(zip_source_t *src, unsigned int flags, zip_error_t *error) {
     za->entry = cdir->entry;
     za->nentry = cdir->nentry;
     za->nentry_alloc = cdir->nentry_alloc;
-    za->comment_orig = cdir->comment;
+
+    zip_check_torrentzip(za, cdir);
+
+    if (ZIP_IS_TORRENTZIP(za)) {
+        /* Torrentzip uses the archive comment to detect changes by tools that are not torrentzip aware. */
+        _zip_string_free(cdir->comment);
+    }
+    else {
+        za->comment_orig = cdir->comment;
+    }
 
     free(cdir);
 
@@ -521,10 +532,15 @@ _zip_allocate_new(zip_source_t *src, unsigned int flags, zip_error_t *error) {
 
     za->src = src;
     za->open_flags = flags;
+    za->flags = 0;
+    za->ch_flags = 0;
+    za->write_crc = NULL;
+
     if (flags & ZIP_RDONLY) {
         za->flags |= ZIP_AFL_RDONLY;
         za->ch_flags |= ZIP_AFL_RDONLY;
     }
+
     return za;
 }
 
@@ -872,4 +888,80 @@ _zip_read_eocd64(zip_source_t *src, zip_buffer_t *buffer, zip_uint64_t buf_offse
     cd->offset = offset;
 
     return cd;
+}
+
+
+static int decode_hex(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    else if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    else {
+        return -1;
+    }
+}
+
+/* _zip_check_torrentzip:
+   check whether ZA has a valid TORRENTZIP comment, i.e. is torrentzipped */
+
+static void zip_check_torrentzip(zip_t *za, const zip_cdir_t *cdir) {
+    zip_uint32_t crc_should;
+    char buf[8+1];
+    size_t i;
+
+    if (cdir == NULL) {
+        return;
+    }
+
+    if (_zip_string_length(cdir->comment) != TORRENTZIP_SIGNATURE_LENGTH + TORRENTZIP_CRC_LENGTH
+        || strncmp((const char *)cdir->comment->raw, TORRENTZIP_SIGNATURE, TORRENTZIP_SIGNATURE_LENGTH) != 0)
+        return;
+
+    memcpy(buf, cdir->comment->raw + TORRENTZIP_SIGNATURE_LENGTH, TORRENTZIP_CRC_LENGTH);
+    buf[TORRENTZIP_CRC_LENGTH] = '\0';
+    crc_should = 0;
+    for (i = 0; i < TORRENTZIP_CRC_LENGTH; i += 2) {
+        int low, high;
+        high = decode_hex((buf[i]));
+        low = decode_hex(buf[i + 1]);
+        if (high < 0 || low < 0) {
+            return;
+        }
+        crc_should = (crc_should << 8) + (high << 4) + low;
+    }
+
+    {
+        zip_stat_t st;
+        zip_source_t* src_window;
+        zip_source_t* src_crc;
+        zip_uint8_t buffer[512];
+        zip_int64_t ret;
+
+        zip_stat_init(&st);
+        st.valid |= ZIP_STAT_SIZE | ZIP_STAT_CRC;
+        st.size = cdir->size;
+        st.crc = crc_should;
+        if ((src_window = _zip_source_window_new(za->src, cdir->offset, cdir->size, &st, 0, NULL, NULL, 0, NULL))  == NULL) {
+            return;
+        }
+        if ((src_crc = zip_source_crc_create(src_window, 1, NULL)) == NULL) {
+            zip_source_free(src_window);
+            return;
+        }
+        if (zip_source_open(src_crc) != 0) {
+            zip_source_free(src_crc);
+            return;
+        }
+        while ((ret = zip_source_read(src_crc, buffer, sizeof(buffer))) > 0) {
+        }
+        zip_source_free(src_crc);
+        if (ret < 0) {
+            return;
+        }
+    }
+
+    /* TODO: if check consistency, check cdir entries for valid values */
+    za->flags |= ZIP_AFL_IS_TORRENTZIP;
 }

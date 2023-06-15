@@ -38,7 +38,12 @@
 
 static void _zip_file_attributes_from_dirent(zip_file_attributes_t *attributes, zip_dirent_t *de);
 
-zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t flags, zip_uint64_t start, zip_uint64_t len, const char *password, zip_error_t *error) {
+ZIP_EXTERN zip_source_t *zip_source_zip_file(zip_t* za, zip_t *srcza, zip_uint64_t srcidx, zip_flags_t flags, zip_uint64_t start, zip_int64_t len, const char *password) {
+    return zip_source_zip_file_create(srcza, srcidx, flags, start, len, password, &za->error);
+}
+
+
+ZIP_EXTERN zip_source_t *zip_source_zip_file_create(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t flags, zip_uint64_t start, zip_int64_t len, const char *password, zip_error_t *error) {
     /* TODO: We need to make sure that the returned source is invalidated when srcza is closed. */
     zip_source_t *src, *s2;
     zip_stat_t st;
@@ -48,16 +53,20 @@ zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t
     zip_flags_t stat_flags;
     zip_int64_t data_len;
 
-    if (srcza == NULL || srcidx >= srcza->nentry || len > ZIP_INT64_MAX) {
+    if (srcza == NULL || srcidx >= srcza->nentry || len < -1) {
         zip_error_set(error, ZIP_ER_INVAL, 0);
         return NULL;
+    }
+
+    if (flags & ZIP_FL_ENCRYPTED) {
+        flags |= ZIP_FL_COMPRESSED;
     }
 
     changed_data = false;
     if ((flags & ZIP_FL_UNCHANGED) == 0) {
         zip_entry_t *entry = srcza->entry + srcidx;
         if (ZIP_ENTRY_DATA_CHANGED(entry)) {
-            if (!zip_source_supports_reopen(entry->source)) {
+            if ((flags & ZIP_FL_COMPRESSED) || !zip_source_supports_reopen(entry->source)) {
                 zip_error_set(error, ZIP_ER_CHANGED, 0);
                 return NULL;
             }
@@ -80,23 +89,19 @@ zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t
         return NULL;
     }
 
-    if (flags & ZIP_FL_ENCRYPTED) {
-        flags |= ZIP_FL_COMPRESSED;
-    }
-
-    if ((start > 0 || len > 0) && (flags & ZIP_FL_COMPRESSED)) {
+    if ((start > 0 || len >= 0) && (flags & ZIP_FL_COMPRESSED)) {
         zip_error_set(error, ZIP_ER_INVAL, 0);
         return NULL;
     }
 
     have_size = (st.valid & ZIP_STAT_SIZE) != 0;
     /* overflow or past end of file */
-    if ((start > 0 || len > 0) && ((start + len < start) || (have_size && (start + len > st.size)))) {
+    if (len >= 0 && ((start > 0 && start + len < start) || (have_size && start + len > st.size))) {
         zip_error_set(error, ZIP_ER_INVAL, 0);
         return NULL;
     }
 
-    if (len == 0) {
+    if (len == -1) {
         if (have_size) {
             if (st.size - start > ZIP_INT64_MAX) {
                 zip_error_set(error, ZIP_ER_INVAL, 0);
@@ -109,11 +114,7 @@ zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t
         }
     }
     else {
-        if (len > ZIP_INT64_MAX) {
-            zip_error_set(error, ZIP_ER_INVAL, 0);
-            return NULL;
-        }
-        data_len = (zip_int64_t)(len);
+           data_len = len;
     }
 
     if (have_size) {
@@ -199,7 +200,7 @@ zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t
             st2.valid |= ZIP_STAT_MTIME;
         }
 
-        if ((src = _zip_source_window_new(src, start, data_len, &st2, &attributes, source_archive, source_index, error)) == NULL) {
+        if ((src = _zip_source_window_new(src, start, data_len, &st2, ZIP_STAT_NAME, &attributes, source_archive, source_index, error)) == NULL) {
             return NULL;
         }
     }
@@ -218,7 +219,7 @@ zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t
            attributes and to have a source that positions the read
            offset properly before each read for multiple zip_file_t
            referring to the same underlying source */
-        if ((src =  _zip_source_window_new(srcza->src, 0, (zip_int64_t)st.comp_size, &st, &attributes, srcza, srcidx, error)) == NULL) {
+        if ((src =  _zip_source_window_new(srcza->src, 0, (zip_int64_t)st.comp_size, &st, ZIP_STAT_NAME, &attributes, srcza, srcidx, error)) == NULL) {
             return NULL;
         }
     }
@@ -234,7 +235,7 @@ zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t
            attributes and to have a source that positions the read
            offset properly before each read for multiple zip_file_t
            referring to the same underlying source */
-        if ((src = _zip_source_window_new(src, 0, data_len, &st, &attributes, NULL, 0, error)) == NULL) {
+        if ((src = _zip_source_window_new(src, 0, data_len, &st, ZIP_STAT_NAME, &attributes, NULL, 0, error)) == NULL) {
             return NULL;
         }
     }
@@ -261,24 +262,24 @@ zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t
         }
 
         s2 = enc_impl(srcza, src, st.encryption_method, 0, password);
-        zip_source_free(src);
         if (s2 == NULL) {
+            zip_source_free(src);
             return NULL;
         }
         src = s2;
     }
     if (needs_decompress) {
         s2 = zip_source_decompress(srcza, src, st.comp_method);
-        zip_source_free(src);
         if (s2 == NULL) {
+            zip_source_free(src);
             return NULL;
         }
         src = s2;
     }
     if (needs_crc) {
         s2 = zip_source_crc_create(src, 1, error);
-        zip_source_free(src);
         if (s2 == NULL) {
+            zip_source_free(src);
             return NULL;
         }
         src = s2;
@@ -291,9 +292,9 @@ zip_source_t *_zip_source_zip_new(zip_t *srcza, zip_uint64_t srcidx, zip_flags_t
             st2.valid = ZIP_STAT_SIZE;
             st2.size = (zip_uint64_t)data_len;
         }
-        s2 = _zip_source_window_new(src, start, data_len, &st2, 0, NULL, 0, error);
-        zip_source_free(src);
+        s2 = _zip_source_window_new(src, start, data_len, &st2, ZIP_STAT_NAME, NULL, NULL, 0, error);
         if (s2 == NULL) {
+            zip_source_free(src);
             return NULL;
         }
         src = s2;

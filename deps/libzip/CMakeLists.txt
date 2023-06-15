@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.4.0)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 if (${CMAKE_VERSION} VERSION_LESS "3.17.0")
@@ -6,7 +6,7 @@ if (${CMAKE_VERSION} VERSION_LESS "3.17.0")
 endif()
 
 project(libzip
-  VERSION 1.9.2
+  VERSION 1.9.99
   LANGUAGES C)
 
 option(ENABLE_COMMONCRYPTO "Enable use of CommonCrypto" ON)
@@ -238,12 +238,17 @@ if(ENABLE_LZMA)
 endif(ENABLE_LZMA)
 
 if(ENABLE_ZSTD)
-  find_package(Zstd 1.3.6)
-  if(Zstd_FOUND)
+  find_package(zstd 1.3.6)
+  if(zstd_FOUND)
     set(HAVE_LIBZSTD 1)
+    if(TARGET zstd::libzstd_shared)
+      set(zstd_TARGET zstd::libzstd_shared)
+    else()
+      set(zstd_TARGET zstd::libzstd_static)
+    endif()
   else()
     message(WARNING "-- zstd library not found; zstandard support disabled")
-  endif(Zstd_FOUND)
+  endif(zstd_FOUND)
 endif(ENABLE_ZSTD)
 
 if (COMMONCRYPTO_FOUND)
@@ -252,12 +257,12 @@ if (COMMONCRYPTO_FOUND)
 elseif (WINDOWS_CRYPTO_FOUND)
   set(HAVE_CRYPTO 1)
   set(HAVE_WINDOWS_CRYPTO 1)
-elseif (GNUTLS_FOUND AND NETTLE_FOUND)
-  set(HAVE_CRYPTO 1)
-  set(HAVE_GNUTLS 1)
 elseif (OPENSSL_FOUND)
   set(HAVE_CRYPTO 1)
   set(HAVE_OPENSSL 1)
+elseif (GNUTLS_FOUND AND NETTLE_FOUND)
+  set(HAVE_CRYPTO 1)
+  set(HAVE_GNUTLS 1)
 elseif (MBEDTLS_FOUND)
   set(HAVE_CRYPTO 1)
   set(HAVE_MBEDTLS 1)
@@ -343,7 +348,7 @@ endforeach()
 STRING(CONCAT zlib_link_name "-l" ${ZLIB_LINK_LIBRARY_NAME})
 string(REGEX REPLACE "-lBZip2::BZip2" "-lbz2" LIBS ${LIBS})
 string(REGEX REPLACE "-lLibLZMA::LibLZMA" "-llzma" LIBS ${LIBS})
-string(REGEX REPLACE "-lZstd::Zstd" "-lzstd" LIBS ${LIBS})
+string(REGEX REPLACE "-l${zstd_TARGET}" "-lzstd" LIBS ${LIBS})
 string(REGEX REPLACE "-lOpenSSL::Crypto" "-lssl -lcrypto" LIBS ${LIBS})
 string(REGEX REPLACE "-lZLIB::ZLIB" ${zlib_link_name} LIBS ${LIBS})
 string(REGEX REPLACE "-lGnuTLS::GnuTLS" "-lgnutls" LIBS ${LIBS})
@@ -473,6 +478,15 @@ write_basic_package_version_file("${PROJECT_BINARY_DIR}/${PROJECT_NAME}-config-v
 
 configure_package_config_file("${PROJECT_NAME}-config.cmake.in" "${PROJECT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
   INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libzip)
+
+# Install Find* modules, they are required by libzip-config.cmake to resolve dependencies
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindNettle.cmake
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Findzstd.cmake
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindMbedTLS.cmake
+  DESTINATION
+    ${CMAKE_INSTALL_LIBDIR}/cmake/libzip/modules
+  )  
 
 if(LIBZIP_DO_INSTALL)
   # Add targets to the build-tree export set

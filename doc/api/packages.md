@@ -1165,8 +1165,6 @@ added:
   - v14.19.0
 -->
 
-> Stability: 1 - Experimental
-
 * Type: {string}
 
 ```json

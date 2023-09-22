@@ -11,16 +11,21 @@
 
 namespace node {
 
+using v8::Array;
 using v8::Context;
+using v8::Exception;
 using v8::FunctionCallbackInfo;
 using v8::FunctionTemplate;
+using v8::HandleScope;
 using v8::Isolate;
 using v8::Just;
 using v8::Local;
 using v8::Maybe;
 using v8::MaybeLocal;
+using v8::NewStringType;
 using v8::Nothing;
 using v8::Object;
+using v8::String;
 using v8::Uint32;
 using v8::Value;
 
@@ -306,6 +311,78 @@ bool HashTraits::DeriveBits(
   }
 
   return true;
+}
+
+void DecodeValue(Environment* env, Local<Value> value, void (*callback)(const char*, size_t, EVP_MD_CTX*, EVP_MD const*, unsigned char*), EVP_MD_CTX* ctx, EVP_MD const* md, unsigned char* digest) {
+  if (value->IsString()) {
+    Local<String> value_str = value.As<String>();
+
+    auto ascii_resource = value_str->GetExternalOneByteStringResource();
+    if (ascii_resource) {
+      callback(ascii_resource->data(), ascii_resource->length(), ctx, md, digest);
+      return;
+    }
+
+    StringBytes::InlineDecoder decoder;
+    if (decoder.Decode(env, value_str, UTF8).IsNothing())
+      return;
+    callback(decoder.out(), decoder.size(), ctx, md, digest);
+  } else {
+    ArrayBufferViewContents<char> buf(value);
+    callback(buf.data(), buf.length(), ctx, md, digest);
+  }
+}
+
+void FastHash(const FunctionCallbackInfo<v8::Value>& args) {
+    Environment* env = Environment::GetCurrent(args);
+
+    Isolate* isolate = args.GetIsolate();
+    HandleScope scope(isolate);
+
+    if (!args[0]->IsArray()) {
+        return ThrowCryptoError(env, ERR_get_error(), "First argument must be an array");
+    }
+
+    Local<Array> values_to_hash = Local<Array>::Cast(args[0]);
+    Local<Value> algorithm_val = args[1];
+    Local<Value> encoding_val = args[2];
+
+    const Utf8Value algorithm(isolate, algorithm_val);
+    const encoding encoding = ParseEncoding(env->isolate(), encoding_val, BUFFER);
+
+    const EVP_MD* md = EVP_get_digestbyname(*algorithm);
+    if (!md) {
+        return ThrowCryptoError(env, ERR_get_error(), "Invalid hash encoding");
+    }
+
+    Local<Array> produced_hashes = Array::New(isolate);
+    Local<Value> error;
+
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    unsigned int md_len = EVP_MD_size(md);
+    unsigned char digest[EVP_MAX_MD_SIZE];
+
+    size_t item_count = values_to_hash->Length();
+    std::vector<Local<Value>> digests;
+    digests.resize(item_count);
+
+    for (unsigned int i = 0; i < item_count; i++) {
+      Local<Value> item = values_to_hash->Get(env->context(), i)
+        .ToLocalChecked();
+
+      DecodeValue(env, item, [](const char* data, size_t size, EVP_MD_CTX* ctx, const EVP_MD* md, unsigned char* digest) {
+        unsigned int gen_len;
+
+        EVP_DigestInit(ctx, md);
+        EVP_DigestUpdate(ctx, data, size);
+        EVP_DigestFinal_ex(ctx, digest, &gen_len);
+      }, ctx, md, &digest[0]);
+
+      digests[i] = StringBytes::Encode(env->isolate(), (char*)&digest[0], md_len, encoding, &error)
+        .ToLocalChecked();
+    }
+
+    args.GetReturnValue().Set(Array::New(isolate, &digests[0], item_count));
 }
 
 }  // namespace crypto

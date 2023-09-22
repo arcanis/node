@@ -79,12 +79,16 @@ void Initialize(Local<Object> target,
     return;
   }
 
+  SetMethodNoSideEffect(context, target, "fastHash", FastHash);
+
 #define V(Namespace) Namespace::Initialize(env, target);
   CRYPTO_NAMESPACE_LIST(V)
 #undef V
 }
 
 void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
+  registry->Register(FastHash);
+
 #define V(Namespace) Namespace::RegisterExternalReferences(registry);
   CRYPTO_NAMESPACE_LIST(V)
 #undef V

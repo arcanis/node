@@ -80,6 +80,8 @@ struct HashTraits final {
       v8::Local<v8::Value>* result);
 };
 
+void FastHash(const v8::FunctionCallbackInfo<v8::Value>& args);
+
 using HashJob = DeriveBitsJob<HashTraits>;
 
 }  // namespace crypto
